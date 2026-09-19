@@ -4110,6 +4110,17 @@
                 }
             });
 
+            // Delegación de eventos: botón × para quitar una rúbrica de la
+            // selección en la pantalla de selección múltiple. El botón del
+            // panel lateral se desmarca para reflejar el cambio.
+            rubricsContainerEl.addEventListener('click', (e) => {
+                const btnQuitar = e.target.closest('[data-deseleccionar]');
+                if (!btnQuitar) return;
+                const id = btnQuitar.getAttribute('data-deseleccionar');
+                const btnSidebar = criteriosListaEl.querySelector('button[data-id="' + id + '"]');
+                if (btnSidebar) toggleCriterio(id, btnSidebar);
+            });
+
             // Navegación por hash: #CYR1, #TYD2... permite enlazar una materia
             // directa, y #evaluacion abre el módulo de evaluación integrado.
             window.addEventListener('hashchange', () => {
@@ -4385,7 +4396,7 @@
                 const button = document.createElement('button');
                 // Color de fondo distintivo para competencias específicas
                 button.className = "w-full text-left py-2 md:py-2.5 px-4 rounded-xl bg-indigo-50 text-indigo-800 hover:bg-indigo-100 hover:text-indigo-900 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-50 flex items-center gap-1 md:gap-2 break-words";
-                button.innerHTML = `${competencia.icono}<span class="text-sm md:text-base">${competencia.resumen || competencia.titulo}</span>`;
+                button.innerHTML = `<span class="text-sm md:text-base">${competencia.resumen || competencia.titulo}</span>`;
                 button.setAttribute('data-id', competencia.id);
 
                 button.addEventListener('click', () => {
@@ -4410,15 +4421,13 @@
             rubricasData.forEach(criterio => {
                 const li = document.createElement('li');
                 const button = document.createElement('button');
-                // Viñeta única para todos los criterios y color por competencia
+                // Botones sin viñeta y con color por competencia
                 // (segundo número ordinal del código: CYR.1.X.Y → competencia X)
                 button.className = "crit-btn break-words focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-50";
                 const matiz = HUES_COMPETENCIA[((criterio.competencia || 1) - 1) % HUES_COMPETENCIA.length];
                 button.style.setProperty('--c-h', matiz);
 
-                const iconoHTML = ICONOS['check-circle'];
-
-                button.innerHTML = `${iconoHTML}<span class="text-sm md:text-base">${criterio.titulo}</span>`;
+                button.innerHTML = `<span class="text-sm md:text-base">${criterio.titulo}</span>`;
                 button.setAttribute('data-id', criterio.id);
 
                 button.addEventListener('click', () => {
@@ -4548,7 +4557,7 @@
 
                     // Criterios visibles de esta competencia (con botón × para ocultarlos)
                     visibles.forEach(criterio => {
-                        rubricsContainerCompetenciasEl.innerHTML += createRubricHTML(criterio, true);
+                        rubricsContainerCompetenciasEl.innerHTML += createRubricHTML(criterio, 'ocultar');
                     });
                 });
 
@@ -4578,7 +4587,7 @@
 
                 rubricasData.forEach(criterio => {
                     if (selectedCriterios.includes(criterio.id)) {
-                        const rubricHTML = createRubricHTML(criterio);
+                        const rubricHTML = createRubricHTML(criterio, 'deseleccionar');
                         rubricsContainerEl.innerHTML += rubricHTML;
                     }
                 });
@@ -4587,10 +4596,11 @@
 
         /**
          * Crea el string HTML para una tarjeta de rúbrica completa.
-         * Con removable=true añade un botón × para ocultar el criterio
-         * (usado en la pantalla de selección por competencias).
+         * Con accion='ocultar' añade un botón × para ocultar el criterio
+         * (pantalla de selección por competencias) y con accion='deseleccionar'
+         * un botón × para quitarlo de la selección (selección múltiple).
          */
-        function createRubricHTML(criterio, removable = false) {
+        function createRubricHTML(criterio, accion = null) {
             let headHTML = '<tr class="divide-x divide-gray-200">';
             criterio.niveles.forEach(nivel => {
                 headHTML += `<th class="rubric-cell py-2 px-2 md:py-4 md:px-4 text-xs md:text-sm font-medium text-gray-800 align-top ${nivel.color} w-1/5">${nivel.nivel}</th>`;
@@ -4603,17 +4613,22 @@
             });
             bodyHTML += '</tr>';
 
-            // Botón para ocultar este criterio (solo en la pantalla de competencias)
-            const btnOcultar = removable ? `
-                    <button data-ocultar="${criterio.id}" title="Ocultar este criterio" aria-label="Ocultar este criterio" class="absolute top-3 right-3 md:top-5 md:right-5 p-1.5 rounded-full text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-50">
+            // Botón × en la esquina de la tarjeta (mismo estilo en ambas pantallas):
+            //  - 'ocultar' (competencias): oculta el criterio de esa vista
+            //  - 'deseleccionar' (selección múltiple): lo quita de la selección
+            const esQuitar = accion === 'deseleccionar';
+            const atributoX = esQuitar ? 'data-deseleccionar' : 'data-ocultar';
+            const tituloX = esQuitar ? 'Quitar esta rúbrica de la selección' : 'Ocultar este criterio';
+            const btnCerrar = accion ? `
+                    <button ${atributoX}="${criterio.id}" title="${tituloX}" aria-label="${tituloX}" class="absolute top-3 right-3 md:top-5 md:right-5 p-1.5 rounded-full text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-opacity-50">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 md:h-5 md:w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
                         </svg>
                     </button>` : '';
 
             const fullHTML = `
-                <div class="relative bg-white p-4 md:p-5 lg:p-8 rounded-xl shadow-lg transition-all duration-300${removable ? ' pr-12 md:pr-14' : ''}">
-                    ${btnOcultar}
+                <div class="relative bg-white p-4 md:p-5 lg:p-8 rounded-xl shadow-lg transition-all duration-300${accion ? ' pr-12 md:pr-14' : ''}">
+                    ${btnCerrar}
                     <h2 class="text-xl md:text-2xl lg:text-3xl font-bold text-blue-700 mb-3">${criterio.titulo}</h2>
                     <p class="text-sm md:text-base text-gray-600 mb-6 pb-4 md:mb-8 md:pb-6 border-b border-gray-200">${criterio.descripcion}</p>
                     <div class="overflow-x-auto">
