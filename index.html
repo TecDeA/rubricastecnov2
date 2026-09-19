@@ -751,8 +751,6 @@
  #evaluador-root .btn-add:hover{ background: #bbf7d0; }
  #evaluador-root .btn-sec{ background: #fff; border: 1px solid var(--border); color: var(--text-2); }
  #evaluador-root .btn-sec:hover{ border-color: var(--primary); color: var(--primary); }
- #evaluador-root .btn-success{ background: var(--success); color: #fff; }
- #evaluador-root .btn-success:hover{ background: #15803d; }
  #evaluador-root .btn-danger-sec{ background: #fff; border: 1px solid #fecaca; color: var(--danger); }
  #evaluador-root .btn-danger-sec:hover{ background: var(--danger-50); border-color: var(--danger); }
  #evaluador-root .btn-calculate{
@@ -772,7 +770,6 @@
         }
  #evaluador-root .btn-chip:hover{ background: #e0e7ff; }
  #evaluador-root .btn-mini{ padding: 7px 12px; font-size: .78rem; min-height: 38px; border-radius: 9px; }
- #evaluador-root .w100{ width: 100%; }
  #evaluador-root .btn-row{ display: flex; gap: 8px; flex-wrap: wrap; }
  /* ================= SELECTS DE PUNTUACIÓN ================= */ #evaluador-root select{
             padding: 10px 12px;
@@ -792,11 +789,6 @@
         }
  #evaluador-root .ne-option{ color: #94a3b8; font-style: italic; }
  #evaluador-root .score-ne{ background: #f8fafc; color: #94a3b8; font-style: italic; font-weight: 500; }
- #evaluador-root .score-q0{ background: #fee2e2; color: #991b1b; border-color: #fecaca; }
- #evaluador-root .score-q1{ background: #ffedd5; color: #9a3412; border-color: #fed7aa; }
- #evaluador-root .score-q2{ background: #fef9c3; color: #854d0e; border-color: #fde68a; }
- #evaluador-root .score-q3{ background: #dcfce7; color: #166534; border-color: #bbf7d0; }
- #evaluador-root .score-q4{ background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
  #evaluador-root .select-mini{ min-height: 40px; padding: 6px 10px; font-size: .84rem; flex: 1; min-width: 0; }
  /* ================= PONDERACIÓN ================= */ #evaluador-root .weight-visual{ display: flex; flex-direction: column; gap: 6px; }
  #evaluador-root .weight-bar{
@@ -1799,7 +1791,7 @@
                 </article>
 
                 <!-- Paso 3: Aspectos -->
-                <article class="card step" id="card-aspects">
+                <article class="card step">
                     <header class="step-head">
                         <span class="step-number">3</span>
                         <h2>Aspectos a evaluar</h2>
@@ -1889,7 +1881,7 @@
             </div>
 
             <!-- Evaluación del profesor -->
-            <details id="teacher-section" class="card eval-block" open>
+            <details class="card eval-block" open>
                 <summary>
                     <span class="status-indicator status-saved" id="teacher-status"></span>
                     <span>Evaluación del profesor</span>
@@ -1923,7 +1915,7 @@
             </details>
 
             <!-- Coevaluación del alumnado -->
-            <details id="students-section" class="card eval-block" open>
+            <details class="card eval-block" open>
                 <summary>
                     <span class="status-indicator status-saved" id="students-status"></span>
                     <span>Coevaluación del alumnado</span>
@@ -1989,7 +1981,7 @@
                 </div>
                 <div id="results-stats" class="stats-row"></div>
                 <div class="table-wrap">
-                    <table id="results-table">
+                    <table>
                         <thead>
                             <tr>
                                 <th class="col-name">Estudiante</th>
@@ -2059,6 +2051,24 @@
     </div>
 
     <script>
+        // =========================================================================
+        // === UTILIDADES COMPARTIDAS (evaluador, AutoNotas, RF y RC)          ===
+        // === Escape de HTML e inyección de hojas de estilo: una única        ===
+        // === implementación para todos los módulos de la página.             ===
+        // =========================================================================
+        function __escHTML(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function __hojaEstilos(id, cssTexto) {
+            if (document.getElementById(id)) return;
+            const el = document.createElement('style');
+            el.id = id;
+            el.textContent = cssTexto;
+            document.head.appendChild(el);
+        }
+
         // =========================================================================
         // === ZONA DE DATOS: MATERIAS ===
         // === Para editar una materia, busca su clave (CYR1, CYR2...) y edita  ===
@@ -4555,8 +4565,9 @@
                     `;
                     rubricsContainerCompetenciasEl.innerHTML += competenciaHTML;
 
-                    // Criterios visibles de esta competencia (con botón × para ocultarlos)
-                    visibles.forEach(criterio => {
+                    // Criterios visibles de esta competencia (con botón × para ocultarlos),
+                    // ordenados por código: 1.3.1, 1.3.2, 1.4.1…
+                    criteriosOrdenados(visibles).forEach(criterio => {
                         rubricsContainerCompetenciasEl.innerHTML += createRubricHTML(criterio, 'ocultar');
                     });
                 });
@@ -4585,12 +4596,12 @@
                 welcomeMessageEl.style.display = 'none';
                 exportContainerEl.style.display = 'block';
 
-                rubricasData.forEach(criterio => {
-                    if (selectedCriterios.includes(criterio.id)) {
+                // Pintar ordenados por código: 1.3.1, 1.3.2, 1.4.1…
+                criteriosOrdenados(rubricasData.filter(criterio => selectedCriterios.includes(criterio.id)))
+                    .forEach(criterio => {
                         const rubricHTML = createRubricHTML(criterio, 'deseleccionar');
                         rubricsContainerEl.innerHTML += rubricHTML;
-                    }
-                });
+                    });
             }
         }
 
@@ -4833,16 +4844,63 @@
         }
 
         /**
-         * Criterios actualmente visibles según la pantalla:
+         * Extrae la clave de ordenación de un criterio a partir de su código:
+         * "CYR.1.3.1. Título…" → ["CYR", 1, 3, 1]. Devuelve null si el
+         * título no empieza por un código de ese estilo.
+         */
+        function claveOrdenCriterio(criterio) {
+            const m = String(criterio.titulo || '').match(/^\s*([A-Za-z]{2,4})\.\s*((?:\d+\.?\s*){1,4})/);
+            if (!m) return null;
+            const segs = m[2].split('.').map(s => parseInt(s, 10)).filter(n => !isNaN(n));
+            return segs.length ? [m[1].toUpperCase()].concat(segs) : null;
+        }
+
+        /**
+         * Compara dos criterios por su código con orden numérico por
+         * segmentos: 1.3.1 < 1.3.2 < 1.4.1 < 1.10.1 (y no 1.10.1 < 1.3.2
+         * como haría la ordenación alfabética pura).
+         */
+        function compararCriteriosPorCodigo(a, b) {
+            const ka = claveOrdenCriterio(a), kb = claveOrdenCriterio(b);
+            if (ka && kb) {
+                const n = Math.min(ka.length, kb.length);
+                for (let i = 0; i < n; i++) {
+                    if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
+                }
+                if (ka.length !== kb.length) return ka.length - kb.length;
+            } else if (ka) {
+                return -1;
+            } else if (kb) {
+                return 1;
+            }
+            const ta = String(a.titulo || ''), tb = String(b.titulo || '');
+            return ta === tb ? 0 : (ta < tb ? -1 : 1);
+        }
+
+        /**
+         * Copia de una lista de criterios ordenada por código. Se usa al
+         * pintarlos en pantalla y al exportarlos: siempre 1.3.1, 1.3.2,
+         * 1.4.1…, tanto en la selección múltiple como por competencias.
+         */
+        function criteriosOrdenados(lista) {
+            return lista.slice().sort(compararCriteriosPorCodigo);
+        }
+
+        /**
+         * Criterios actualmente visibles según la pantalla (ordenados por
+         * código):
          *  - competencias: los de las competencias seleccionadas (sin ocultos)
          *  - multiple: los criterios marcados uno a uno
          */
         function criteriaActuales(mode) {
+            let lista;
             if (mode === 'competencias') {
-                return rubricasData.filter(c =>
+                lista = rubricasData.filter(c =>
                     selectedCompetencias.some(id => id == c.competencia) && !criteriosOcultos.has(c.id));
+            } else {
+                lista = rubricasData.filter(c => selectedCriterios.includes(c.id));
             }
-            return rubricasData.filter(c => selectedCriterios.includes(c.id));
+            return criteriosOrdenados(lista);
         }
 
         /**
@@ -5041,7 +5099,12 @@
         // RF.init es idempotente: arrancar() tiene guarda y solo sustituye `host`.
         function configurarRF(contexto) {
             if (!window.RF) return;
-            RF.init(contexto === 'evaluador' ? opcionesRFEvaluador() : opcionesRFGenerador());
+            const opcionesRF = contexto === 'evaluador' ? opcionesRFEvaluador() : opcionesRFGenerador();
+            // La sincronización de rúbricas con Firebase no arranca hasta que
+            // haya una sesión válida (sistema de login): así los archivos
+            // guardados en la base de datos quedan protegidos.
+            if (window.AUTH) AUTH.alListo(function () { RF.init(opcionesRF); });
+            else RF.init(opcionesRF);
         }
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -5053,8 +5116,11 @@
 
             configurarRF(location.hash === '#evaluacion' ? 'evaluador' : 'generador');
 
-            // Edición pedida desde el gestor (posiblemente en otra materia)
-            RF.procesarCargaPendiente();
+            // Edición pedida desde el gestor (posiblemente en otra materia).
+            // Diferida como configurarRF: RF no está listo hasta el login.
+            const procesarPendienteRF = function () { RF.procesarCargaPendiente(); };
+            if (window.AUTH) AUTH.alListo(procesarPendienteRF);
+            else procesarPendienteRF();
         });
 
     </script>
@@ -6477,6 +6543,12 @@
             const bulkAspectsContainer = document.getElementById('teacher-bulk-aspects');
             fillValueSelect(bulkValueSelect);
             bulkAspectsContainer.innerHTML = '';
+            // «Aplicar a todos los aspectos»: acción masiva global (todos los
+            // estudiantes × todos los aspectos). onclick (no addEventListener)
+            // para no duplicar el listener si esta función se vuelve a pintar.
+            document.getElementById('apply-all-aspects').onclick = function () {
+                applyValueToAllAspects(bulkValueSelect.value);
+            };
 
             aspects.forEach(aspect => {
                 const btn = document.createElement('button');
@@ -6707,6 +6779,11 @@
             const container = document.getElementById('coevaluation-bulk-aspects');
             fillValueSelect(select);
             container.innerHTML = '';
+            // «Aplicar a todos los aspectos»: todas las coevaluaciones × todos
+            // los aspectos (misma técnica antirrepetición que en profesor).
+            document.getElementById('apply-all-coevaluation').onclick = function () {
+                applyCoevaluationValueToAllAspectsForAllStudents(select.value);
+            };
 
             aspects.forEach(aspect => {
                 const btn = document.createElement('button');
@@ -7357,7 +7434,6 @@
         let anOverlay = null;
 
         function anCss() {
-            if (document.getElementById('an-css')) return;
             const css = [
                 '.an-overlay{position:fixed;inset:0;z-index:99970;background:rgba(15,23,42,.58);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:20px;animation:anIn .18s ease-out}',
                 '@keyframes anIn{from{opacity:0}to{opacity:1}}',
@@ -7399,10 +7475,7 @@
                 '  .an-foot .an-btn{flex:1}',
                 '}'
             ].join('\n');
-            const el = document.createElement('style');
-            el.id = 'an-css';
-            el.textContent = css;
-            document.head.appendChild(el);
+            __hojaEstilos('an-css', css); // utilidad compartida: implementación única
         }
 
         function anToast(msg) {
@@ -7420,9 +7493,7 @@
         }
 
         function anEsc(s) {
-            return String(s == null ? '' : s)
-                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            return __escHTML(s); // utilidad compartida: implementación única
         }
 
         /** Nota 0-10 de un valor de aspecto («8 (7-8.9)» → 8; cualitativos → escala posicional) */
@@ -7538,14 +7609,15 @@
             document.body.appendChild(anOverlay);
             document.body.style.overflow = 'hidden';
 
+            const escHandler = e => { if (e.key === 'Escape') cerrar(); };
             const cerrar = () => {
                 if (anOverlay && anOverlay.parentNode) anOverlay.parentNode.removeChild(anOverlay);
                 anOverlay = null;
                 document.body.style.overflow = '';
+                document.removeEventListener('keydown', escHandler);
             };
             anOverlay.querySelector('.an-close').addEventListener('click', cerrar);
             anOverlay.addEventListener('mousedown', e => { if (e.target === anOverlay) cerrar(); });
-            const escHandler = e => { if (e.key === 'Escape') { cerrar(); document.removeEventListener('keydown', escHandler); } };
             document.addEventListener('keydown', escHandler);
 
             const chkFinal = anOverlay.querySelector('#an-final');
@@ -8013,9 +8085,7 @@
      * UTILIDADES
      * ============================================================ */
     function esc(s) {
-        return String(s == null ? '' : s)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        return __escHTML(s); // utilidad compartida: implementación única
     }
 
     function fechaCorta(iso) {
@@ -8043,11 +8113,6 @@
 
     function nombreMateria(r) {
         return r.sourceTitle || r.sourceFile || 'Materia desconocida';
-    }
-
-    function esDeEstaApp(r) {
-        if (!host || !host.sourceFile) return false;
-        return r.sourceFile === host.sourceFile;
     }
 
     /* Las apps antiguas (una página por materia) se han unificado en
@@ -8218,11 +8283,7 @@
      * HOJA DE ESTILOS PROPIA (prefijo rf-)
      * ============================================================ */
     function inyectarCSS() {
-        if (document.getElementById('rf-css')) return;
-        const css = document.createElement('style');
-        css.id = 'rf-css';
-        css.textContent = RF_CSS;
-        document.head.appendChild(css);
+        __hojaEstilos('rf-css', RF_CSS); // utilidad compartida: implementación única
     }
 
     /* ============================================================
@@ -8665,11 +8726,20 @@
         bC.focus();
     }
 
-    /* ===== Auto-inyección de estilos al cargar ===== */
+    /* ===== Auto-inyección de estilos al cargar =====
+     * Con el sistema de login, el arranque (carga del SDK de Firebase y
+     * sincronización de las rúbricas guardadas) se difiere hasta que haya
+     * una sesión válida: AUTH.alListo lo dispara. Sin AUTH disponible,
+     * comportamiento original. */
+    function autoArranqueRF() {
+        inyectarCSS();
+        if (window.AUTH) AUTH.alListo(arrancar);
+        else arrancar();
+    }
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', function () { inyectarCSS(); arrancar(); });
+        document.addEventListener('DOMContentLoaded', autoArranqueRF);
     } else {
-        inyectarCSS(); arrancar();
+        autoArranqueRF();
     }
 })();
     </script>
@@ -8706,9 +8776,7 @@
 
     /* ===== Utilidades ===== */
     function esc(s) {
-        return String(s == null ? '' : s)
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        return __escHTML(s); // utilidad compartida: implementación única
     }
     function limpiarHTML(html, max) {
         let t = String(html || '')
@@ -8863,11 +8931,7 @@
     ].join('\n');
 
     function inyectarCSS() {
-        if (document.getElementById('rc-css')) return;
-        const css = document.createElement('style');
-        css.id = 'rc-css';
-        css.textContent = RC_CSS;
-        document.head.appendChild(css);
+        __hojaEstilos('rc-css', RC_CSS); // utilidad compartida: implementación única
     }
 
     const ICO = {
@@ -8910,17 +8974,17 @@
 
         document.body.appendChild(overlay);
         document.body.style.overflow = 'hidden';
+        function escHandler(e) { if (e.key === 'Escape') cerrar(); }
         const cerrar = function () {
             if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
             overlay = null;
             document.body.style.overflow = '';
+            document.removeEventListener('keydown', escHandler);
         };
         overlay.querySelector('.rc-close').addEventListener('click', cerrar);
         overlay.querySelector('[data-rc="cerrar"]').addEventListener('click', cerrar);
         overlay.addEventListener('mousedown', function (e) { if (e.target === overlay) cerrar(); });
-        document.addEventListener('keydown', function escHandler(e) {
-            if (e.key === 'Escape') { cerrar(); document.removeEventListener('keydown', escHandler); }
-        });
+        document.addEventListener('keydown', escHandler);
 
         pintarPasoConexion();
     }
@@ -9150,6 +9214,1057 @@
 
     /* ===== API pública ===== */
     window.RC = { abrir: abrir };
+})();
+    </script>
+    <!-- ============================================================
+     MÓDULO DE AUTENTICACIÓN (AUTH)
+     Login por usuario + contraseña · primer usuario automático ·
+     gestión de usuarios (añadir, cambiar contraseña, eliminar)
+     ============================================================ -->
+<style id="au-css">
+/* ===== MÓDULO DE AUTENTICACIÓN: login, chip de usuario y gestión de usuarios ===== */
+/* Prefijo au- para no colisionar con el resto de la app */
+
+/* ---------- Pantalla de login (cubre toda la app hasta haber sesión válida) ---------- */
+#au-login{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:linear-gradient(140deg,rgba(238,241,251,.94) 0%,rgba(228,233,247,.96) 45%,rgba(240,229,250,.95) 100%);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);animation:auIn .25s ease-out}
+#au-login[hidden]{display:none}
+@keyframes auIn{from{opacity:0}to{opacity:1}}
+@keyframes auUp{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+.au-card{background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,.8);border-radius:24px;
+  box-shadow:0 24px 64px rgba(79,70,229,.16),0 4px 18px rgba(15,23,42,.07);
+  width:100%;max-width:412px;padding:32px 28px 24px;animation:auUp .32s cubic-bezier(.2,.8,.3,1);text-align:center}
+.au-tile{width:56px;height:56px;border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);box-shadow:0 10px 24px rgba(79,70,229,.35);color:#fff}
+.au-tile svg{width:30px;height:30px}
+.au-title{font-family:'Plus Jakarta Sans','Inter',system-ui,sans-serif;font-weight:800;font-size:1.5rem;
+  letter-spacing:-.02em;line-height:1.2;margin:0;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);-webkit-background-clip:text;background-clip:text;color:transparent}
+.au-sub{color:#64748b;font-size:.86rem;margin:6px 0 20px;line-height:1.45}
+.au-banner{background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-size:.82rem;line-height:1.5;
+  padding:10px 13px;border-radius:12px;margin:0 0 16px;text-align:left}
+.au-campo{text-align:left;margin-bottom:13px}
+.au-campo label{display:block;font-size:.8rem;font-weight:600;color:#334155;margin-bottom:5px}
+.au-input-wrap{position:relative}
+.au-input{width:100%;box-sizing:border-box;padding:10px 42px 10px 13px;border:1px solid #cbd5e1;border-radius:12px;
+  background:#fff;font-size:15px;color:#0f172a;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+.au-input:focus{outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.16)}
+.au-input:disabled{background:#f1f5f9;color:#94a3b8}
+.au-ojo{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:none;border:0;padding:7px;
+  color:#94a3b8;cursor:pointer;border-radius:8px;display:flex;line-height:0}
+.au-ojo:hover{color:#4f46e5}
+.au-error{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:.83rem;line-height:1.45;
+  padding:9px 12px;border-radius:10px;margin:2px 0 12px;text-align:left}
+.au-error.au-visible{display:block}
+.au-btn{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;cursor:pointer;
+  padding:11px 18px;border-radius:13px;font:600 15px 'Inter',system-ui,sans-serif;color:#fff;
+  background:linear-gradient(135deg,#4f46e5,#6d28d9);
+  box-shadow:0 8px 20px rgba(79,70,229,.32);transition:transform .15s,box-shadow .15s,filter .15s}
+.au-btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.06);box-shadow:0 12px 26px rgba(79,70,229,.4)}
+.au-btn:active:not(:disabled){transform:translateY(0)}
+.au-btn:disabled{opacity:.65;cursor:default}
+.au-btn svg{width:17px;height:17px}
+.au-error-conexion{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:.83rem;
+  padding:10px 12px;border-radius:10px;margin:10px 0 2px;text-align:left;line-height:1.45}
+.au-error-conexion.au-visible{display:block}
+
+/* ---------- Chip de usuario flotante (visible con sesión iniciada) ---------- */
+#au-fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:99980}
+#au-fab[hidden]{display:none}
+.au-fab-wrap{position:relative}
+.au-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.88);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border:1px solid rgba(203,213,225,.9);border-radius:999px;padding:5px 12px 5px 5px;cursor:pointer;
+  box-shadow:0 8px 24px rgba(15,23,42,.14);transition:transform .15s,box-shadow .15s;
+  font:600 13.5px 'Inter',system-ui,sans-serif;color:#0f172a}
+.au-chip:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(79,70,229,.24)}
+.au-chip:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(79,70,229,.35)}
+.au-ava{width:30px;height:30px;border-radius:999px;display:flex;align-items:center;justify-content:center;flex:none;
+  color:#fff;font:700 13px/1 'Inter',system-ui,sans-serif;background:linear-gradient(135deg,#4f46e5,#7c3aed)}
+.au-chip .au-chev{width:14px;height:14px;color:#94a3b8;transition:transform .18s}
+.au-chip[aria-expanded="true"] .au-chev{transform:rotate(180deg)}
+.au-menu{position:absolute;right:0;bottom:calc(100% + 10px);min-width:236px;background:#fff;border:1px solid #e2e8f0;
+  border-radius:16px;box-shadow:0 18px 48px rgba(15,23,42,.22);padding:6px;display:none;animation:auUp .18s ease-out}
+.au-menu.au-abierta{display:block}
+.au-menu-cab{padding:10px 12px 9px;border-bottom:1px solid #eef2f7;margin-bottom:5px}
+.au-menu-cab small{display:block;font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}
+.au-menu-cab div{font:700 14px 'Inter',system-ui,sans-serif;color:#0f172a;margin-top:2px;word-break:break-all}
+.au-menu-item{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;text-align:left;padding:10px 12px;
+  border:0;background:none;border-radius:10px;font:600 13.5px 'Inter',system-ui,sans-serif;color:#334155;cursor:pointer}
+.au-menu-item:hover{background:#eef2ff;color:#4f46e5}
+.au-menu-item:focus-visible{outline:2px solid #4f46e5;outline-offset:-2px}
+.au-menu-item svg{width:16px;height:16px;flex:none}
+.au-menu-item.au-peligro:hover{background:#fef2f2;color:#b91c1c}
+
+/* ---------- Modal de gestión de usuarios ---------- */
+#au-gestion{position:fixed;inset:0;z-index:99995;background:rgba(15,23,42,.58);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;
+  padding:20px;animation:auIn .18s ease-out}
+#au-gestion[hidden]{display:none}
+.au-modal{background:#fff;border-radius:20px;box-shadow:0 24px 64px rgba(15,23,42,.3);width:100%;max-width:560px;
+  max-height:min(88dvh,760px);display:flex;flex-direction:column;animation:auUp .22s cubic-bezier(.2,.8,.3,1);overflow:hidden}
+.au-modal-cab{display:flex;align-items:center;gap:12px;padding:18px 20px 14px;border-bottom:1px solid #eef2f7;flex-shrink:0}
+.au-modal-cab .au-micono{width:38px;height:38px;border-radius:12px;background:#eef2ff;color:#4f46e5;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.au-modal-cab .au-micono svg{width:19px;height:19px}
+.au-modal-cab h3{font:700 17px/1.25 'Inter',system-ui,sans-serif;color:#0f172a;margin:0}
+.au-modal-cab p{font:400 12.5px/1.4 'Inter',system-ui,sans-serif;color:#64748b;margin:3px 0 0}
+.au-modal-cab .au-cerrar{margin-left:auto;background:none;border:0;padding:7px;border-radius:9px;color:#94a3b8;cursor:pointer;display:flex}
+.au-modal-cab .au-cerrar:hover{background:#f1f5f9;color:#0f172a}
+.au-modal-cab .au-cerrar svg{width:17px;height:17px}
+.au-modal-cuerpo{padding:18px 20px 20px;overflow-y:auto}
+.au-seccion{font:700 12px 'Inter',system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#94a3b8;margin:0 0 12px}
+.au-form-alta{background:#f8fafc;border:1px solid #eef2f7;border-radius:14px;padding:14px;margin-bottom:22px}
+.au-form-alta .au-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:480px){.au-form-alta .au-grid{grid-template-columns:1fr 1fr}}
+.au-form-alta .au-grid .au-entero{grid-column:1/-1}
+.au-form-alta .au-campo{margin-bottom:0}
+.au-form-alta .au-input{padding:9px 12px;font-size:14px}
+.au-form-alta .au-acciones{margin-top:12px;display:flex;justify-content:flex-end}
+.au-form-alta .au-btn{width:auto;padding:9px 16px;font-size:13.5px}
+.au-lista{display:flex;flex-direction:column;gap:9px}
+.au-fila{border:1px solid #eef2f7;border-radius:14px;padding:11px 13px;background:#fff;transition:border-color .15s,box-shadow .15s}
+.au-fila:hover{border-color:#c7d2fe;box-shadow:0 3px 12px rgba(79,70,229,.08)}
+.au-fila-cab{display:flex;align-items:center;gap:11px}
+.au-fila-info{flex:1;min-width:0}
+.au-fila-info b{display:block;font:700 14.5px 'Inter',system-ui,sans-serif;color:#0f172a;word-break:break-all}
+.au-fila-info small{display:block;color:#94a3b8;font-size:11.5px;margin-top:2px}
+.au-badge-tu{display:inline-block;background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;font:700 10.5px 'Inter',sans-serif;
+  padding:2px 8px;border-radius:999px;margin-left:7px;vertical-align:1px}
+.au-fila-acciones{display:flex;gap:6px;flex:none}
+.au-mini{display:inline-flex;align-items:center;gap:6px;border:1px solid #e2e8f0;background:#fff;color:#475569;
+  border-radius:9px;padding:6px 10px;font:600 12.5px 'Inter',system-ui,sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap}
+.au-mini:hover{border-color:#4f46e5;color:#4f46e5;background:#eef2ff}
+.au-mini svg{width:13px;height:13px;flex:none}
+.au-mini.au-peligro:hover{border-color:#dc2626;color:#b91c1c;background:#fef2f2}
+.au-mini:disabled{opacity:.45;cursor:not-allowed}
+.au-confirmar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.au-confirmar span{font:600 12.5px 'Inter',system-ui,sans-serif;color:#b91c1c}
+.au-si{background:#dc2626;border-color:#dc2626;color:#fff}
+.au-si:hover{background:#b91c1c;border-color:#b91c1c;color:#fff}
+.au-no:hover{border-color:#64748b;color:#334155}
+.au-form-clave{margin-top:11px;padding-top:11px;border-top:1px dashed #e2e8f0;display:none}
+.au-form-clave.au-visible{display:block}
+.au-form-clave .au-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:480px){.au-form-clave .au-grid{grid-template-columns:1fr 1fr}}
+.au-form-clave .au-campo{margin-bottom:0}
+.au-form-clave .au-input{padding:9px 12px;font-size:14px}
+.au-form-clave .au-acciones{margin-top:10px;display:flex;justify-content:flex-end;gap:8px}
+.au-form-clave .au-btn{width:auto;padding:8px 14px;font-size:13px}
+.au-vacio{text-align:center;color:#94a3b8;font-size:13.5px;padding:14px 0 6px}
+.au-mini-error{color:#b91c1c;font-size:12px;margin-top:8px;display:none}
+.au-mini-error.au-visible{display:block}
+
+/* ---------- Toasts ---------- */
+.au-toast-wrap{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
+  z-index:99998;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.au-toast{background:#0f172a;color:#fff;font:600 13.5px 'Inter',system-ui,sans-serif;padding:11px 18px;border-radius:999px;
+  box-shadow:0 10px 30px rgba(15,23,42,.35);display:flex;align-items:center;gap:8px;
+  animation:auUp .25s cubic-bezier(.2,.8,.3,1);max-width:min(92vw,460px);text-align:center}
+.au-toast svg{width:15px;height:15px;flex:none}
+.au-toast.au-ok svg{color:#34d399}
+.au-toast.au-err svg{color:#f87171}
+.au-toast.au-fuera{opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s}
+
+/* ---------- Accesibilidad: menos movimiento ---------- */
+@media (prefers-reduced-motion: reduce){
+  #au-login,.au-card,.au-menu,.au-modal,.au-toast,#au-gestion{animation:none}
+}
+
+</style>
+
+<!-- Pantalla de inicio de sesión: cubre la app hasta haber sesión válida -->
+<div id="au-login" role="dialog" aria-modal="true" aria-label="Iniciar sesión">
+    <div class="au-card">
+        <div class="au-tile" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="3.6" width="18" height="4.5" rx="1.6" fill="currentColor"/>
+                <rect x="3" y="10.75" width="18" height="4.5" rx="1.6" fill="currentColor" opacity=".66"/>
+                <rect x="3" y="17.9" width="9.4" height="3.8" rx="1.6" fill="currentColor" opacity=".66"/>
+                <circle cx="17.7" cy="18.9" r="4.9" fill="#ffffff"/>
+                <path d="M14.9 19.1l1.9 1.9 3.1-3.6" stroke="#4f46e5" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+        </div>
+        <h1 class="au-title">Rúbricas de Evaluación</h1>
+        <p class="au-sub">Acceso al generador y evaluador de rúbricas<br>Departamento de Tecnología</p>
+
+        <div id="au-banner" class="au-banner" hidden>
+            Primer acceso: todavía no existe ningún usuario. El usuario con el que inicies
+            sesión ahora se creará automáticamente y podrás añadir más desde
+            «Gestionar usuarios».
+        </div>
+
+        <form id="au-form" autocomplete="off" novalidate hidden>
+            <div class="au-campo">
+                <label for="au-user">Usuario</label>
+                <div class="au-input-wrap">
+                    <input id="au-user" class="au-input" type="text" autocomplete="username"
+                           spellcheck="false" autocapitalize="none" placeholder="Usuario">
+                </div>
+            </div>
+            <div class="au-campo">
+                <label for="au-pass">Contraseña</label>
+                <div class="au-input-wrap">
+                    <input id="au-pass" class="au-input" type="password" autocomplete="current-password" placeholder="Mínimo 6 caracteres">
+                    <button type="button" class="au-ojo" id="au-ojo" aria-label="Mostrar u ocultar la contraseña" tabindex="-1">
+                        <svg id="au-ojo-abierto" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg id="au-ojo-tachado" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" hidden><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="au-error" class="au-error" role="alert"></div>
+            <button type="submit" id="au-submit" class="au-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                <span id="au-submit-texto">Entrar</span>
+            </button>
+        </form>
+
+        <div id="au-error-conexion" class="au-error-conexion">
+            No se pudo conectar con la base de datos. Comprueba tu conexión a internet.
+        </div>
+    </div>
+</div>
+
+<!-- Chip flotante de usuario (sesión iniciada) -->
+<div id="au-fab" hidden>
+    <div class="au-fab-wrap">
+        <button type="button" class="au-chip" id="au-chip" aria-haspopup="true" aria-expanded="false" aria-label="Menú de usuario">
+            <span class="au-ava" id="au-ava" aria-hidden="true">?</span>
+            <span id="au-chip-nombre"></span>
+            <svg class="au-chev" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 15 12 9 6 15"/></svg>
+        </button>
+        <div class="au-menu" id="au-menu" role="menu" aria-label="Opciones de usuario">
+            <div class="au-menu-cab">
+                <small>Sesión iniciada</small>
+                <div id="au-menu-usuario"></div>
+            </div>
+            <button type="button" class="au-menu-item" id="au-abrir-gestion" role="menuitem">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                Gestionar usuarios
+            </button>
+            <button type="button" class="au-menu-item au-peligro" id="au-logout" role="menuitem">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Cerrar sesión
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de gestión de usuarios -->
+<div id="au-gestion" hidden>
+    <div class="au-modal" role="dialog" aria-modal="true" aria-label="Gestión de usuarios">
+        <div class="au-modal-cab">
+            <div class="au-micono" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            </div>
+            <div>
+                <h3>Gestión de usuarios</h3>
+                <p>Todos los usuarios pueden crear y editar rúbricas, y gestionar los usuarios.</p>
+            </div>
+            <button type="button" class="au-cerrar" id="au-g-cerrar" aria-label="Cerrar">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+        </div>
+        <div class="au-modal-cuerpo">
+            <p class="au-seccion">Añadir usuario</p>
+            <form class="au-form-alta" id="au-form-alta" autocomplete="off" novalidate>
+                <div class="au-grid">
+                    <div class="au-campo au-entero">
+                        <label for="au-g-user">Usuario</label>
+                        <input id="au-g-user" class="au-input" type="text" spellcheck="false" autocapitalize="none" placeholder="3-24 caracteres: letras, números, guiones">
+                    </div>
+                    <div class="au-campo">
+                        <label for="au-g-pass1">Contraseña</label>
+                        <input id="au-g-pass1" class="au-input" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+                    </div>
+                    <div class="au-campo">
+                        <label for="au-g-pass2">Repetir contraseña</label>
+                        <input id="au-g-pass2" class="au-input" type="password" autocomplete="new-password" placeholder="Otra vez la misma">
+                    </div>
+                </div>
+                <div id="au-g-error-alta" class="au-mini-error" role="alert"></div>
+                <div class="au-acciones">
+                    <button type="submit" class="au-btn" id="au-g-crear">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        <span id="au-g-crear-texto">Añadir usuario</span>
+                    </button>
+                </div>
+            </form>
+
+            <p class="au-seccion" id="au-g-titulo-lista">Usuarios</p>
+            <div class="au-lista" id="au-g-lista"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+/* ============================================================
+ * MÓDULO DE AUTENTICACIÓN (AUTH) · rubricas.html
+ * ------------------------------------------------------------
+ * Login por usuario + contraseña (sin correo electrónico).
+ *  - Usuarios en Firebase RTDB (portal-tecdea/rubricasApp/usuarios)
+ *    con contraseñas protegidas por PBKDF2-SHA256 (salt aleatorio,
+ *    120 000 iteraciones). Nunca se guarda la contraseña en claro.
+ *  - Sesiones: token aleatorio en /sesiones + caché local de 30 días
+ *    (ventana deslizante). Sin conexión se confía en la caché no
+ *    caducada (modo offline / PWA).
+ *  - El primer usuario se crea automáticamente si no existe ninguno.
+ *  - Todos los usuarios tienen los mismos privilegios: crear/editar
+ *    rúbricas y gestionar usuarios (añadir, cambiar contraseña y
+ *    eliminar; al eliminar se revocan sus sesiones).
+ *  - La app (y la sincronización de rúbricas con Firebase) no arranca
+ *    hasta que hay una sesión válida: AUTH.alListo(cb).
+ * ============================================================ */
+(function () {
+    'use strict';
+
+    /* ===== Configuración ===== */
+    var BASE = 'https://tecdea-default-rtdb.europe-west1.firebasedatabase.app/portal-tecdea/rubricasApp';
+    var LS_KEY = 'rubricasApp:sesion';
+    var ITER = 120000;
+    var DURACION_SESION = 30 * 24 * 60 * 60 * 1000; /* 30 días */
+    var RE_USUARIO = /^[A-Za-z0-9_-]{3,24}$/;
+    var PASS_MIN = 6;
+
+    var usuarioActual = null;
+    var listo = false;
+    var callbacks = [];
+    var menuAbierto = false;
+    var errorConexion = false;   /* login bloqueado por falta de conexión */
+    var reintentoTimer = null;   /* reintento automático programado */
+
+    /* ===== Utilidades ===== */
+    function $(id) { return document.getElementById(id); }
+
+    function bytesAHex(bytes) {
+        var s = '';
+        for (var i = 0; i < bytes.length; i++) s += ('0' + bytes[i].toString(16)).slice(-2);
+        return s;
+    }
+    function hexABytes(hex) {
+        var out = new Uint8Array(hex.length / 2);
+        for (var i = 0; i < out.length; i++) out[i] = parseInt(hex.substr(i * 2, 2), 16);
+        return out;
+    }
+    function aleatorioHex(nBytes) {
+        var b = new Uint8Array(nBytes);
+        crypto.getRandomValues(b);
+        return bytesAHex(b);
+    }
+    function concatenar(a, b) {
+        var out = new Uint8Array(a.length + b.length);
+        out.set(a, 0); out.set(b, a.length);
+        return out;
+    }
+
+    /* ===== SHA-256 puro en JavaScript =====
+     * Respaldo para contextos no seguros (p. ej. http sin TLS), donde
+     * crypto.subtle no está disponible. Produce exactamente el mismo
+     * resultado que la implementación nativa. */
+    var K256 = new Uint32Array([
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ]);
+
+    function sha256js(bytes) {
+        var H = new Uint32Array([0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                                 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]);
+        var l = bytes.length;
+        var total = (((l + 8) >> 6) + 1) << 6;
+        var msg = new Uint8Array(total);
+        msg.set(bytes);
+        msg[l] = 0x80;
+        var dv = new DataView(msg.buffer);
+        dv.setUint32(total - 8, Math.floor(l / 536870912));
+        dv.setUint32(total - 4, (l << 3) >>> 0);
+        var w = new Uint32Array(64);
+        for (var bloque = 0; bloque < total; bloque += 64) {
+            var t;
+            for (t = 0; t < 16; t++) w[t] = dv.getUint32(bloque + t * 4);
+            for (t = 16; t < 64; t++) {
+                var x = w[t - 15], y = w[t - 2];
+                var s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+                var s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+                w[t] = (w[t - 16] + s0 + w[t - 7] + s1) >>> 0;
+            }
+            var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+            for (t = 0; t < 64; t++) {
+                var S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
+                var ch = (e & f) ^ (~e & g);
+                var t1 = (h + S1 + ch + K256[t] + w[t]) >>> 0;
+                var S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
+                var mj = (a & b) ^ (a & c) ^ (b & c);
+                var t2 = (S0 + mj) >>> 0;
+                h = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;
+            }
+            H[0] = (H[0] + a) >>> 0; H[1] = (H[1] + b) >>> 0; H[2] = (H[2] + c) >>> 0; H[3] = (H[3] + d) >>> 0;
+            H[4] = (H[4] + e) >>> 0; H[5] = (H[5] + f) >>> 0; H[6] = (H[6] + g) >>> 0; H[7] = (H[7] + h) >>> 0;
+        }
+        var out = new Uint8Array(32);
+        var odv = new DataView(out.buffer);
+        for (var i = 0; i < 8; i++) odv.setUint32(i * 4, H[i]);
+        return out;
+    }
+
+    function hmacSha256js(clave, datos) {
+        if (clave.length > 64) clave = sha256js(clave);
+        var ipad = new Uint8Array(64 + datos.length);
+        var opad = new Uint8Array(64 + 32);
+        for (var i = 0; i < 64; i++) {
+            var b = i < clave.length ? clave[i] : 0;
+            ipad[i] = b ^ 0x36;
+            opad[i] = b ^ 0x5c;
+        }
+        ipad.set(datos, 64);
+        opad.set(sha256js(ipad), 64);
+        return sha256js(opad);
+    }
+
+    /* PBKDF2-HMAC-SHA256 con salida de 256 bits (1 bloque) */
+    function pbkdf2js(claveStr, salt, iteraciones) {
+        var clave = new TextEncoder().encode(claveStr);
+        var u = hmacSha256js(clave, concatenar(salt, new Uint8Array([0, 0, 0, 1])));
+        var t = new Uint8Array(u);
+        for (var i = 1; i < iteraciones; i++) {
+            u = hmacSha256js(clave, u);
+            for (var j = 0; j < 32; j++) t[j] ^= u[j];
+        }
+        return t;
+    }
+
+    /* ===== Derivación de contraseña =====
+     * Usa crypto.subtle (contextos seguros) y, si no existe,
+     * el respaldo en JavaScript puro. Ambas producen el mismo hash. */
+    function hashear(clave, saltHex, iteraciones) {
+        if (window.crypto && crypto.subtle && typeof crypto.subtle.deriveBits === 'function') {
+            var enc = new TextEncoder();
+            return crypto.subtle.importKey('raw', enc.encode(clave), 'PBKDF2', false, ['deriveBits'])
+                .then(function (keyMat) {
+                    return crypto.subtle.deriveBits(
+                        { name: 'PBKDF2', hash: 'SHA-256', salt: hexABytes(saltHex), iterations: iteraciones },
+                        keyMat, 256);
+                })
+                .then(function (bits) { return bytesAHex(new Uint8Array(bits)); });
+        }
+        return new Promise(function (resolve) {
+            setTimeout(function () {
+                resolve(bytesAHex(pbkdf2js(clave, hexABytes(saltHex), iteraciones)));
+            }, 0);
+        });
+    }
+
+    function nuevoHash(clave) {
+        var salt = aleatorioHex(16);
+        return hashear(clave, salt, ITER).then(function (hash) {
+            return { salt: salt, hash: hash, iter: ITER };
+        });
+    }
+
+    /* ===== Acceso a la base de datos (REST de Realtime Database) ===== */
+    function peticion(metodo, ruta, cuerpo) {
+        var opts = { method: metodo, cache: 'no-store' };
+        if (cuerpo !== undefined) {
+            opts.headers = { 'Content-Type': 'application/json' };
+            opts.body = JSON.stringify(cuerpo);
+        }
+        return fetch(BASE + ruta + '.json', opts).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        });
+    }
+    function rget(ruta) { return peticion('GET', ruta); }
+    function rput(ruta, val) { return peticion('PUT', ruta, val); }
+    function rpatch(ruta, val) { return peticion('PATCH', ruta, val); }
+    function rdel(ruta) { return peticion('DELETE', ruta); }
+
+    /* ===== Sesión local ===== */
+    function leerSesionLocal() {
+        try {
+            var s = JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+            return (s && s.t && s.u && s.exp) ? s : null;
+        } catch (e) { return null; }
+    }
+    function guardarSesionLocal(token, usuario) {
+        try {
+            localStorage.setItem(LS_KEY, JSON.stringify({ t: token, u: usuario, exp: Date.now() + DURACION_SESION }));
+        } catch (e) { /* almacenamiento no disponible */ }
+    }
+    function limpiarSesionLocal() {
+        try { localStorage.removeItem(LS_KEY); } catch (e) { }
+    }
+
+    /* ===== Toasts ===== */
+    var SVG_OK = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>';
+    var SVG_ERR = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+
+    function toast(mensaje, ok) {
+        var wrap = document.querySelector('.au-toast-wrap');
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.className = 'au-toast-wrap';
+            document.body.appendChild(wrap);
+        }
+        var t = document.createElement('div');
+        t.className = 'au-toast ' + (ok ? 'au-ok' : 'au-err');
+        var ico = document.createElement('span');
+        ico.innerHTML = ok ? SVG_OK : SVG_ERR;
+        var txt = document.createElement('span');
+        txt.textContent = mensaje;
+        t.appendChild(ico.firstChild);
+        t.appendChild(txt);
+        wrap.appendChild(t);
+        setTimeout(function () {
+            t.classList.add('au-fuera');
+            setTimeout(function () { t.remove(); }, 320);
+        }, 3400);
+    }
+
+    /* ===== Pantalla de login ===== */
+    function estadoLogin(estado) { /* 'conectando' | 'listo' | 'error' */
+        $('au-form').hidden = estado !== 'listo';
+        $('au-error-conexion').classList.toggle('au-visible', estado === 'error');
+        errorConexion = estado === 'error';
+        if (estado === 'listo') {
+            setTimeout(function () { try { $('au-user').focus(); } catch (e) { } }, 60);
+        }
+    }
+
+    function errorLogin(msg) {
+        var el = $('au-error');
+        el.textContent = msg;
+        el.classList.add('au-visible');
+    }
+    function ocultarErrorLogin() {
+        var el = $('au-error');
+        el.textContent = '';
+        el.classList.remove('au-visible');
+    }
+
+    /* ===== Flujo de sesión ===== */
+    function marcarListo() {
+        if (listo) return;
+        listo = true;
+        if (reintentoTimer) { clearTimeout(reintentoTimer); reintentoTimer = null; }
+        errorConexion = false;
+        $('au-login').hidden = true;
+        document.body.style.overflow = '';
+        pintarChip();
+        var cbs = callbacks; callbacks = [];
+        cbs.forEach(function (cb) { try { cb(); } catch (e) { } });
+    }
+
+    function abrirSesion(usuario) {
+        var anterior = leerSesionLocal();
+        var token = aleatorioHex(32);
+        var previo = (anterior && anterior.u !== usuario)
+            ? rdel('/sesiones/' + anterior.t).catch(function () { })
+            : Promise.resolve();
+        return previo
+            .then(function () {
+                return rput('/sesiones/' + token, { usuario: usuario, creadaEn: new Date().toISOString() });
+            })
+            .then(function () {
+                guardarSesionLocal(token, usuario);
+                usuarioActual = usuario;
+                marcarListo();
+            });
+    }
+
+    /* Inicio de sesión (crea el primer usuario si la base está vacía) */
+    function iniciarSesion(usuario, clave) {
+        usuario = (usuario || '').trim();
+        if (!RE_USUARIO.test(usuario)) {
+            return Promise.reject(new Error('El usuario debe tener entre 3 y 24 caracteres (letras, números, guion o guion bajo).'));
+        }
+        if (!clave || clave.length < PASS_MIN) {
+            return Promise.reject(new Error('La contraseña debe tener al menos ' + PASS_MIN + ' caracteres.'));
+        }
+        var primerUsuario = false;
+        return rget('/usuarios/' + usuario)
+            .then(function (rec) {
+                if (rec) {
+                    return hashear(clave, rec.salt, rec.iter || ITER).then(function (hash) {
+                        if (hash !== rec.hash) throw new Error('Usuario o contraseña incorrectos.');
+                    });
+                }
+                return rget('/usuarios').then(function (todos) {
+                    if (todos !== null) {
+                        /* El usuario no existe: derivar igualmente para no
+                         * revelar por el tiempo de respuesta si existe o no. */
+                        return hashear(clave, '00000000000000000000000000000000', ITER).then(function () {
+                            throw new Error('Usuario o contraseña incorrectos.');
+                        });
+                    }
+                    /* Base vacía: primer usuario, se crea automáticamente */
+                    primerUsuario = true;
+                    return nuevoHash(clave).then(function (reg) {
+                        return rput('/usuarios/' + usuario, {
+                            hash: reg.hash, salt: reg.salt, iter: reg.iter,
+                            creadoEn: new Date().toISOString(), creadoPor: null
+                        });
+                    });
+                });
+            })
+            .then(function () { return abrirSesion(usuario); })
+            .then(function () { return { primerUsuario: primerUsuario }; });
+    }
+
+    /* Validación de la sesión guardada (arranque de la app) */
+    function validarSesion() {
+        var s = leerSesionLocal();
+        if (!s) return Promise.resolve(false);
+        if (Date.now() > s.exp) { limpiarSesionLocal(); return Promise.resolve(false); }
+        return rget('/sesiones/' + s.t).then(function (rec) {
+            if (rec && rec.usuario === s.u) {
+                guardarSesionLocal(s.t, s.u); /* refresca la caducidad (ventana deslizante) */
+                usuarioActual = s.u;
+                return true;
+            }
+            limpiarSesionLocal();
+            return false;
+        }).catch(function () {
+            /* Sin conexión: confiar en la sesión local no caducada (offline / PWA) */
+            usuarioActual = s.u;
+            return true;
+        });
+    }
+
+    function prepararLogin() {
+        return rget('/usuarios').then(function (todos) {
+            estadoLogin('listo');
+            $('au-banner').hidden = !!todos; /* aviso de primer usuario solo si no hay ninguno */
+        }).catch(function () {
+            estadoLogin('error');
+            programarReintento();
+        });
+    }
+
+    /* Sin botón de reintento: la conexión con la base de datos se
+     * vuelve a comprobar sola cada pocos segundos y, en cuanto el navegador
+     * detecta que hay red, al momento. */
+    function programarReintento() {
+        if (reintentoTimer) return;
+        reintentoTimer = setTimeout(function () {
+            reintentoTimer = null;
+            init();
+        }, 5000);
+    }
+
+    function init() {
+        if (reintentoTimer) { clearTimeout(reintentoTimer); reintentoTimer = null; }
+        estadoLogin('conectando');
+        $('au-login').hidden = false;
+        document.body.style.overflow = 'hidden';
+        validarSesion().then(function (valida) {
+            if (valida) { marcarListo(); return; }
+            return prepararLogin();
+        });
+    }
+
+    function logout() {
+        var s = leerSesionLocal();
+        var fin = s ? rdel('/sesiones/' + s.t).catch(function () { }) : Promise.resolve();
+        return fin.then(function () {
+            limpiarSesionLocal();
+            /* Recarga limpia: nada de rúbricas en memoria tras cerrar sesión */
+            location.reload();
+        });
+    }
+
+    /* ===== Chip de usuario y menú ===== */
+    var PALETAS = [
+        ['#4f46e5', '#7c3aed'], ['#0d9488', '#0284c7'], ['#c2410c', '#ea580c'],
+        ['#db2777', '#a855f7'], ['#b45309', '#d97706'], ['#0f766e', '#059669']
+    ];
+    function colorDe(usuario) {
+        var n = 0;
+        for (var i = 0; i < usuario.length; i++) n += usuario.charCodeAt(i);
+        var par = PALETAS[n % PALETAS.length];
+        return par[0] + ',' + par[1];
+    }
+
+    function pintarChip() {
+        var u = usuarioActual || '';
+        $('au-fab').hidden = !u;
+        if (!u) return;
+        $('au-ava').textContent = u.charAt(0).toUpperCase();
+        $('au-ava').style.background = 'linear-gradient(135deg,' + colorDe(u) + ')';
+        $('au-chip-nombre').textContent = u;
+        $('au-menu-usuario').textContent = u;
+    }
+
+    function abrirMenu(abierto) {
+        menuAbierto = abierto;
+        $('au-menu').classList.toggle('au-abierta', abierto);
+        $('au-chip').setAttribute('aria-expanded', abierto ? 'true' : 'false');
+    }
+
+    /* ===== Gestión de usuarios ===== */
+    function validarNuevo(usuario, clave, clave2) {
+        usuario = (usuario || '').trim();
+        if (!RE_USUARIO.test(usuario)) throw new Error('El usuario debe tener entre 3 y 24 caracteres (letras, números, guion o guion bajo).');
+        if (!clave || clave.length < PASS_MIN) throw new Error('La contraseña debe tener al menos ' + PASS_MIN + ' caracteres.');
+        if (clave2 !== undefined && clave !== clave2) throw new Error('Las contraseñas no coinciden.');
+        return usuario;
+    }
+
+    function crearUsuario(usuario, clave, clave2, por) {
+        return Promise.resolve()
+            .then(function () { return validarNuevo(usuario, clave, clave2); })
+            .then(function (u) {
+                return rget('/usuarios/' + u).then(function (existe) {
+                    if (existe !== null) throw new Error('Ya existe un usuario con ese nombre.');
+                    return nuevoHash(clave);
+                });
+            })
+            .then(function (reg) {
+                return rput('/usuarios/' + usuario.trim(), {
+                    hash: reg.hash, salt: reg.salt, iter: reg.iter,
+                    creadoEn: new Date().toISOString(), creadoPor: por || null
+                });
+            });
+    }
+
+    function cambiarPassword(usuario, clave, clave2) {
+        return Promise.resolve()
+            .then(function () { validarNuevo(usuario, clave, clave2); })
+            .then(function () { return nuevoHash(clave); })
+            .then(function (reg) {
+                return rpatch('/usuarios/' + usuario, { hash: reg.hash, salt: reg.salt, iter: reg.iter });
+            });
+    }
+
+    function eliminarUsuario(usuario) {
+        if (usuario === usuarioActual) {
+            return Promise.reject(new Error('No puedes eliminar tu propio usuario mientras estás conectado.'));
+        }
+        return rdel('/usuarios/' + usuario).then(function () {
+            /* Revocar las sesiones abiertas del usuario eliminado */
+            return rget('/sesiones').then(function (sesiones) {
+                if (!sesiones) return;
+                var nulos = {};
+                Object.keys(sesiones).forEach(function (t) {
+                    if (sesiones[t] && sesiones[t].usuario === usuario) nulos['/sesiones/' + t] = null;
+                });
+                var claves = Object.keys(nulos);
+                if (claves.length) return rpatch('', nulos);
+            }).catch(function () { });
+        });
+    }
+
+    /* ----- interfaz del modal ----- */
+    function abrirGestion() {
+        $('au-gestion').hidden = false;
+        document.body.style.overflow = 'hidden';
+        cargarListaUsuarios();
+        setTimeout(function () { try { $('au-g-user').focus(); } catch (e) { } }, 60);
+    }
+    function cerrarGestion() {
+        $('au-gestion').hidden = true;
+        if (listo) document.body.style.overflow = '';
+    }
+
+    function miniError(id, msg) {
+        var el = $(id);
+        if (!el) return;
+        el.textContent = msg || '';
+        el.classList.toggle('au-visible', !!msg);
+    }
+
+    function fechaCorta(iso) {
+        try {
+            return new Date(iso).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+        } catch (e) { return ''; }
+    }
+
+    function cargarListaUsuarios() {
+        var cont = $('au-g-lista');
+        cont.textContent = '';
+        var vacio = document.createElement('p');
+        vacio.className = 'au-vacio';
+        vacio.textContent = 'Cargando usuarios…';
+        cont.appendChild(vacio);
+        rget('/usuarios').then(function (datos) {
+            cont.textContent = '';
+            var nombres = Object.keys(datos || {}).sort(function (a, b) { return a.localeCompare(b, 'es'); });
+            $('au-g-titulo-lista').textContent = 'Usuarios (' + nombres.length + ')';
+            if (!nombres.length) {
+                var v = document.createElement('p');
+                v.className = 'au-vacio';
+                v.textContent = 'No hay usuarios todavía.';
+                cont.appendChild(v);
+                return;
+            }
+            nombres.forEach(function (nombre) {
+                cont.appendChild(crearFilaUsuario(nombre, datos[nombre] || {}));
+            });
+        }).catch(function () {
+            cont.textContent = '';
+            var err = document.createElement('p');
+            err.className = 'au-vacio';
+            err.textContent = 'No se pudo cargar la lista de usuarios. Comprueba la conexión.';
+            cont.appendChild(err);
+        });
+    }
+
+    function crearFilaUsuario(nombre, datos) {
+        var fila = document.createElement('div');
+        fila.className = 'au-fila';
+
+        var cab = document.createElement('div');
+        cab.className = 'au-fila-cab';
+
+        var ava = document.createElement('span');
+        ava.className = 'au-ava';
+        ava.style.background = 'linear-gradient(135deg,' + colorDe(nombre) + ')';
+        ava.textContent = nombre.charAt(0).toUpperCase();
+
+        var info = document.createElement('div');
+        info.className = 'au-fila-info';
+        var b = document.createElement('b');
+        b.textContent = nombre;
+        if (nombre === usuarioActual) {
+            var badge = document.createElement('span');
+            badge.className = 'au-badge-tu';
+            badge.textContent = 'Tú';
+            b.appendChild(badge);
+        }
+        var meta = document.createElement('small');
+        var creado = datos.creadoEn ? 'Creado el ' + fechaCorta(datos.creadoEn) : '';
+        var por = datos.creadoPor ? ' por ' + datos.creadoPor : '';
+        meta.textContent = (creado + por) || 'Sin datos de creación';
+        info.appendChild(b);
+        info.appendChild(meta);
+
+        var acciones = document.createElement('div');
+        acciones.className = 'au-fila-acciones';
+
+        /* Botón: cambiar contraseña */
+        var btnClave = document.createElement('button');
+        btnClave.type = 'button';
+        btnClave.className = 'au-mini';
+        btnClave.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg> Cambiar contraseña';
+        btnClave.addEventListener('click', function () {
+            formClave.classList.toggle('au-visible');
+            if (formClave.classList.contains('au-visible')) {
+                miniError('au-g-error-' + nombre, '');
+                try { inputC1.focus(); } catch (e) { }
+            }
+        });
+
+        /* Botón: eliminar (confirmación en dos pasos) */
+        var btnEliminar = document.createElement('button');
+        btnEliminar.type = 'button';
+        btnEliminar.className = 'au-mini au-peligro';
+        var esPropio = nombre === usuarioActual;
+        if (esPropio) {
+            btnEliminar.disabled = true;
+            btnEliminar.title = 'No puedes eliminar tu propio usuario';
+            btnEliminar.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Eliminar';
+        } else {
+            pintarBotonEliminar();
+        }
+        function pintarBotonEliminar(confirmando) {
+            if (confirmando) {
+                btnEliminar.innerHTML = '';
+                var span = document.createElement('span');
+                span.textContent = '¿Eliminar a ' + nombre + '?';
+                var si = document.createElement('button');
+                si.type = 'button';
+                si.className = 'au-mini au-si';
+                si.textContent = 'Sí, eliminar';
+                var no = document.createElement('button');
+                no.type = 'button';
+                no.className = 'au-mini au-no';
+                no.textContent = 'No';
+                btnEliminar.className = 'au-confirmar';
+                btnEliminar.appendChild(span);
+                btnEliminar.appendChild(si);
+                btnEliminar.appendChild(no);
+                si.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    btnEliminar.disabled = true;
+                    eliminarUsuario(nombre).then(function () {
+                        toast('Usuario «' + nombre + '» eliminado', true);
+                        cargarListaUsuarios();
+                    }).catch(function (err) {
+                        toast(err.message || 'No se pudo eliminar el usuario', false);
+                        pintarBotonEliminar(false);
+                        btnEliminar.disabled = false;
+                    });
+                });
+                no.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    pintarBotonEliminar(false);
+                });
+            } else {
+                btnEliminar.className = 'au-mini au-peligro';
+                btnEliminar.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg> Eliminar';
+                btnEliminar.onclick = function () { pintarBotonEliminar(true); };
+            }
+        }
+
+        acciones.appendChild(btnClave);
+        acciones.appendChild(btnEliminar);
+
+        cab.appendChild(ava);
+        cab.appendChild(info);
+        cab.appendChild(acciones);
+        fila.appendChild(cab);
+
+        /* Formulario inline: nueva contraseña */
+        var formClave = document.createElement('form');
+        formClave.className = 'au-form-clave';
+        formClave.autocomplete = 'off';
+        formClave.noValidate = true;
+        formClave.innerHTML =
+            '<div class="au-grid">' +
+            '<div class="au-campo"><label>Nueva contraseña</label>' +
+            '<input class="au-input" type="password" placeholder="Mínimo 6 caracteres"></div>' +
+            '<div class="au-campo"><label>Repetir contraseña</label>' +
+            '<input class="au-input" type="password" placeholder="Otra vez la misma"></div>' +
+            '</div>' +
+            '<div class="au-mini-error" id="au-g-error-' + nombre + '"></div>' +
+            '<div class="au-acciones">' +
+            '<button type="button" class="au-mini au-no">Cancelar</button>' +
+            '<button type="submit" class="au-btn">Guardar</button>' +
+            '</div>';
+        var inputs = formClave.querySelectorAll('input');
+        var inputC1 = inputs[0], inputC2 = inputs[1];
+        formClave.querySelector('.au-no').addEventListener('click', function () {
+            formClave.classList.remove('au-visible');
+            inputC1.value = ''; inputC2.value = '';
+            miniError('au-g-error-' + nombre, '');
+        });
+        formClave.addEventListener('submit', function (e) {
+            e.preventDefault();
+            miniError('au-g-error-' + nombre, '');
+            cambiarPassword(nombre, inputC1.value, inputC2.value).then(function () {
+                formClave.classList.remove('au-visible');
+                inputC1.value = ''; inputC2.value = '';
+                toast('Contraseña de «' + nombre + '» actualizada', true);
+            }).catch(function (err) {
+                miniError('au-g-error-' + nombre, err.message || 'No se pudo cambiar la contraseña');
+            });
+        });
+        fila.appendChild(formClave);
+        return fila;
+    }
+
+    /* ===== Eventos de la interfaz ===== */
+    function conectarEventos() {
+        /* Login */
+        $('au-form').addEventListener('submit', function (e) {
+            e.preventDefault();
+            ocultarErrorLogin();
+            var btn = $('au-submit');
+            var texto = $('au-submit-texto');
+            btn.disabled = true;
+            texto.textContent = 'Comprobando…';
+            iniciarSesion($('au-user').value, $('au-pass').value).then(function (res) {
+                if (res.primerUsuario) {
+                    toast('Usuario «' + usuarioActual + '» creado: primer usuario del sistema', true);
+                }
+                $('au-pass').value = '';
+            }).catch(function (err) {
+                errorLogin(err.message || 'No se pudo iniciar sesión.');
+                btn.disabled = false;
+                texto.textContent = 'Entrar';
+            });
+        });
+        $('au-ojo').addEventListener('click', function () {
+            var inp = $('au-pass');
+            var mostrar = inp.type === 'password';
+            inp.type = mostrar ? 'text' : 'password';
+            $('au-ojo-abierto').hidden = mostrar;
+            $('au-ojo-tachado').hidden = !mostrar;
+        });
+        /* Al recuperar la conexión, reintentar el arranque sin esperar al temporizador */
+        window.addEventListener('online', function () {
+            if (errorConexion && !$('au-login').hidden) init();
+        });
+
+        /* Chip y menú */
+        $('au-chip').addEventListener('click', function (e) {
+            e.stopPropagation();
+            abrirMenu(!menuAbierto);
+        });
+        document.addEventListener('click', function (e) {
+            if (menuAbierto && !e.target.closest('#au-menu') && !e.target.closest('#au-chip')) abrirMenu(false);
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            if (menuAbierto) abrirMenu(false);
+            if (!$('au-gestion').hidden) cerrarGestion();
+        });
+        $('au-abrir-gestion').addEventListener('click', function () {
+            abrirMenu(false);
+            abrirGestion();
+        });
+        $('au-logout').addEventListener('click', function () {
+            abrirMenu(false);
+            logout();
+        });
+
+        /* Modal de gestión */
+        $('au-g-cerrar').addEventListener('click', cerrarGestion);
+        $('au-gestion').addEventListener('click', function (e) {
+            if (e.target === $('au-gestion')) cerrarGestion();
+        });
+        $('au-form-alta').addEventListener('submit', function (e) {
+            e.preventDefault();
+            miniError('au-g-error-alta', '');
+            var btn = $('au-g-crear');
+            var texto = $('au-g-crear-texto');
+            btn.disabled = true;
+            texto.textContent = 'Creando…';
+            crearUsuario($('au-g-user').value, $('au-g-pass1').value, $('au-g-pass2').value, usuarioActual)
+                .then(function () {
+                    toast('Usuario «' + ($('au-g-user').value || '').trim() + '» creado', true);
+                    $('au-g-user').value = ''; $('au-g-pass1').value = ''; $('au-g-pass2').value = '';
+                    cargarListaUsuarios();
+                    btn.disabled = false;
+                    texto.textContent = 'Añadir usuario';
+                })
+                .catch(function (err) {
+                    miniError('au-g-error-alta', err.message || 'No se pudo crear el usuario');
+                    btn.disabled = false;
+                    texto.textContent = 'Añadir usuario';
+                });
+        });
+    }
+
+    /* ===== API pública ===== */
+    window.AUTH = {
+        init: init,
+        usuario: function () { return usuarioActual; },
+        autenticado: function () { return listo && !!usuarioActual; },
+        alListo: function (cb) {
+            if (listo) { try { cb(); } catch (e) { } }
+            else callbacks.push(cb);
+        },
+        logout: logout,
+        abrirGestion: abrirGestion,
+        /* Solo para pruebas y diagnóstico */
+        __interno: {
+            hashear: hashear,
+            sha256js: sha256js,
+            pbkdf2js: pbkdf2js,
+            rget: rget,
+            ITER: ITER
+        }
+    };
+
+    conectarEventos();
+    init();
 })();
     </script>
     <script src="./regist_serviceWorker.js"></script>
