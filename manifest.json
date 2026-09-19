@@ -5,7 +5,7 @@
   "lang": "es",
   "dir": "ltr",
   "id": "rubricas-departamento-tecnologia",
-  "start_url": "./rubricas.html",
+  "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui"],
