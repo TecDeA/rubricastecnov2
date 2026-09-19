@@ -23,7 +23,7 @@ const CACHE = 'rubricas-app-' + VERSION;
 /* Recursos básicos que se guardan al instalar (tolerante a fallos) */
 const CORE = [
   './',
-  './rubricas.html',
+  './index.html',
   './manifest.json',
   './favicon.ico',
   './icon-192.png',
