@@ -12,6 +12,10 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Rúbricas">
     <title>Rúbricas de Evaluación - Departamento de Tecnología</title>
+    <!-- T24 · Fondo aurora desde el primer instante: mientras el navegador
+         descarga Tailwind (script que bloquea el parseo) nunca se ve una
+         pantalla en blanco, sino el tono del velo de login -->
+    <style>html{background-color:#e4e9f7}</style>
     <!-- Carga de Tailwind CSS -->
     
     <script src="https://unpkg.com/tailwindcss-cdn@3.4.10/tailwindcss.js"></script>
@@ -562,6 +566,10 @@
         }
  #evaluador-root .save-state.unsaved .dot{ background: #f59e0b; animation: pulse 1.2s infinite; }
  #evaluador-root .save-state.unsaved{ color: #b45309; }
+ #evaluador-root .save-state .csvg{ width: 13px; height: 13px; flex: none; }
+ #evaluador-root .save-state.cloud-ok{ color: #047857; background: #ecfdf5; border-color: #a7f3d0; }
+ #evaluador-root .save-state.cloud-error{ color: #b91c1c; background: #fef2f2; border-color: #fecaca; }
+ @media (max-width: 560px){ #evaluador-root #cloud-autosave-text{ display: none; } }
  @keyframes pulse{ 50% { opacity: .35; } }
  @media (min-width: 768px){ #evaluador-root .topbar-inner{ padding: 12px 20px; }
  #evaluador-root .topbar-home-label{ display: inline; }
@@ -581,6 +589,25 @@
             border-radius: var(--radius);
             box-shadow: var(--shadow-1);
         }
+ /* Autoguardado en la nube: interruptor de la tarjeta «Evaluaciones en la nube» */
+ #evaluador-root .autosave-nube{
+            margin-top: 12px;
+            padding: 10px 12px;
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+            background: var(--surface-2);
+        }
+ #evaluador-root .autosave-nube label{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: .8rem;
+            font-weight: 600;
+            color: var(--text-2);
+            cursor: pointer;
+        }
+ #evaluador-root .autosave-nube input[type="checkbox"]{ width: 16px; height: 16px; accent-color: #4f46e5; cursor: pointer; flex: none; }
+ #evaluador-root .autosave-nube p{ margin: 6px 0 0 26px; font-size: .72rem; color: var(--text-3); line-height: 1.45; }
  /* ============ RÚBRICAS GUARDADAS (FIREBASE) ============ */ #evaluador-root .saved-rubrics-card{
             display: flex;
             align-items: center;
@@ -789,6 +816,15 @@
         }
  #evaluador-root .ne-option{ color: #94a3b8; font-style: italic; }
  #evaluador-root .score-ne{ background: #f8fafc; color: #94a3b8; font-style: italic; font-weight: 500; }
+ /* ===== AJUSTE FINO DE NOTA («✎ 7,3 (7-8.9)») ===== */
+ #evaluador-root .ajuste-option{ color: #6d28d9; font-style: italic; }
+ #evaluador-root .score-ajustado{ background: #f5f3ff; color: #5b21b6; border-color: #c4b5fd; }
+ #evaluador-root .af-input{ width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; font-family: inherit; background: #fff; color: var(--text); box-sizing: border-box; }
+ #evaluador-root .af-input-err{ border-color: var(--danger); background: #fef2f2; }
+ #evaluador-root .af-hint{ font-size: .8rem; color: var(--text-3); margin: 6px 0 0; }
+ #evaluador-root .af-error{ font-size: .8rem; color: var(--danger); font-weight: 600; margin: 6px 0 0; min-height: 1.05em; }
+ #evaluador-root .af-aviso{ font-size: .8rem; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 6px 10px; margin: 6px 0 0; }
+ #evaluador-root .saved-rubrics-card .btn-col{ display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
  #evaluador-root .select-mini{ min-height: 40px; padding: 6px 10px; font-size: .84rem; flex: 1; min-width: 0; }
  /* ================= PONDERACIÓN ================= */ #evaluador-root .weight-visual{ display: flex; flex-direction: column; gap: 6px; }
  #evaluador-root .weight-bar{
@@ -1258,7 +1294,10 @@
             padding: 11px 13px;
         }
  #evaluador-root .check-row input{ width: 18px; height: 18px; accent-color: var(--primary); }
- #evaluador-root .modal-actions{ display: flex; gap: 10px; margin-top: 18px; }
+ #evaluador-root .modal-actions{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+ /* Con 3 botones (p. ej. el diálogo de ajuste fino con «Quitar ajuste») en móvil
+    no caben en una fila: envuelven en lugar de desbordar el modal */
+ #evaluador-root .modal-actions .btn{ flex: 0 1 auto; }
  #evaluador-root .modal-actions .btn{ flex: 1; }
  /* ============ SELECTOR DE GRUPOS (IMPORTAR ALUMNADO) ============ */
  #evaluador-root .gp-list{ list-style:none; margin:0; padding:0; max-height:280px; overflow-y:auto; border:1px solid var(--border); border-radius:12px; background:var(--surface-2); display:flex; flex-direction:column; }
@@ -1295,6 +1334,259 @@
         #evaluador-root input, #evaluador-root select, #evaluador-root button, #evaluador-root textarea { line-height: normal; }
     </style>
 <body class="app-bg">
+    <!-- ============================================================
+     MÓDULO DE AUTENTICACIÓN (AUTH)
+     Login por usuario + contraseña · primer usuario automático ·
+     gestión de usuarios (añadir, cambiar contraseña, eliminar)
+     ============================================================ -->
+<style id="au-css">
+/* ===== MÓDULO DE AUTENTICACIÓN: login, chip de usuario y gestión de usuarios ===== */
+/* Prefijo au- para no colisionar con el resto de la app */
+
+/* ---------- Pantalla de login (cubre toda la app hasta haber sesión válida) ---------- */
+/* T25 · SIN animación de entrada en el velo: una fundición (opacity 0→1)
+   deja ver la app a través de él durante el primer cuarto de segundo, porque
+   la app se parsea justo detrás (a 3,7 KB). Opaco desde el primer frame =
+   cero destello. La entrada suave la aporta la tarjeta (.au-card → auUp). */
+#au-login{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:linear-gradient(140deg,#eef1fb 0%,#e4e9f7 45%,#f0e5fa 100%)}
+#au-login[hidden]{display:none}
+/* T25 · cortina de cierre de sesión: solo el velo opaco, sin tarjeta,
+   tapando la app al instante mientras llega la recarga (sin parpadeos) */
+#au-login.au-cortina .au-card{display:none}
+/* T26 · La cortina oculta TODO el cuerpo salvo el velo: ningún frame que el
+   navegador conserve o reutilice durante la recarga (paint holding) puede
+   contener la app, y en el documento nuevo la app no se pinta hasta que el
+   login está listo. display:none!important = blindaje absoluto. */
+html.au-cerrando body > *:not(#au-login){display:none!important}
+/* T26 · Aviso de progreso dentro de la cortina: giratorio + texto suave,
+   centrados (el velo ya es flex centrado y la tarjeta está oculta) */
+#au-login.au-cortina{gap:12px}
+#au-login.au-cortina::before{content:'';width:18px;height:18px;flex:none;border-radius:50%;
+  border:2.5px solid #c7d2fe;border-top-color:#4f46e5;animation:auGiro .8s linear infinite}
+#au-login.au-cortina::after{content:'Cerrando sesión…';
+  font:600 14px 'Inter',system-ui,sans-serif;color:#64748b;letter-spacing:.01em}
+@keyframes auGiro{to{transform:rotate(360deg)}}
+@keyframes auIn{from{opacity:0}to{opacity:1}}
+@keyframes auUp{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
+.au-card{background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,.8);border-radius:24px;
+  box-shadow:0 24px 64px rgba(79,70,229,.16),0 4px 18px rgba(15,23,42,.07);
+  width:100%;max-width:412px;padding:32px 28px 24px;animation:auUp .32s cubic-bezier(.2,.8,.3,1);text-align:center}
+.au-tile{width:56px;height:56px;border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);box-shadow:0 10px 24px rgba(79,70,229,.35);color:#fff}
+.au-tile svg{width:30px;height:30px}
+.au-title{font-family:'Plus Jakarta Sans','Inter',system-ui,sans-serif;font-weight:800;font-size:1.5rem;
+  letter-spacing:-.02em;line-height:1.2;margin:0;
+  background:linear-gradient(135deg,#4f46e5,#7c3aed);-webkit-background-clip:text;background-clip:text;color:transparent}
+.au-sub{color:#64748b;font-size:.86rem;margin:6px 0 20px;line-height:1.45}
+.au-banner{background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-size:.82rem;line-height:1.5;
+  padding:10px 13px;border-radius:12px;margin:0 0 16px;text-align:left}
+.au-campo{text-align:left;margin-bottom:13px}
+.au-campo label{display:block;font-size:.8rem;font-weight:600;color:#334155;margin-bottom:5px}
+.au-input-wrap{position:relative}
+.au-input{width:100%;box-sizing:border-box;padding:10px 42px 10px 13px;border:1px solid #cbd5e1;border-radius:12px;
+  background:#fff;font-size:15px;color:#0f172a;font-family:inherit;transition:border-color .15s,box-shadow .15s}
+.au-input:focus{outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.16)}
+.au-input:disabled{background:#f1f5f9;color:#94a3b8}
+.au-ojo{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:none;border:0;padding:7px;
+  color:#94a3b8;cursor:pointer;border-radius:8px;display:flex;line-height:0}
+.au-ojo:hover{color:#4f46e5}
+.au-error{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:.83rem;line-height:1.45;
+  padding:9px 12px;border-radius:10px;margin:2px 0 12px;text-align:left}
+.au-error.au-visible{display:block}
+.au-btn{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;cursor:pointer;
+  padding:11px 18px;border-radius:13px;font:600 15px 'Inter',system-ui,sans-serif;color:#fff;
+  background:linear-gradient(135deg,#4f46e5,#6d28d9);
+  box-shadow:0 8px 20px rgba(79,70,229,.32);transition:transform .15s,box-shadow .15s,filter .15s}
+.au-btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.06);box-shadow:0 12px 26px rgba(79,70,229,.4)}
+.au-btn:active:not(:disabled){transform:translateY(0)}
+.au-btn:disabled{opacity:.65;cursor:default}
+.au-btn svg{width:17px;height:17px}
+.au-error-conexion{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:.83rem;
+  padding:10px 12px;border-radius:10px;margin:10px 0 2px;text-align:left;line-height:1.45}
+.au-error-conexion.au-visible{display:block}
+
+/* ---------- Chip de usuario flotante (visible con sesión iniciada) ---------- */
+#au-fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:99980}
+#au-fab[hidden]{display:none}
+.au-fab-wrap{position:relative}
+.au-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.88);
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border:1px solid rgba(203,213,225,.9);border-radius:999px;padding:5px 12px 5px 5px;cursor:pointer;
+  box-shadow:0 8px 24px rgba(15,23,42,.14);transition:transform .15s,box-shadow .15s;
+  font:600 13.5px 'Inter',system-ui,sans-serif;color:#0f172a}
+.au-chip:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(79,70,229,.24)}
+.au-chip:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(79,70,229,.35)}
+.au-ava{width:30px;height:30px;border-radius:999px;display:flex;align-items:center;justify-content:center;flex:none;
+  color:#fff;font:700 13px/1 'Inter',system-ui,sans-serif;background:linear-gradient(135deg,#4f46e5,#7c3aed)}
+.au-chip .au-chev{width:14px;height:14px;color:#94a3b8;transition:transform .18s}
+.au-chip[aria-expanded="true"] .au-chev{transform:rotate(180deg)}
+.au-menu{position:absolute;right:0;bottom:calc(100% + 10px);min-width:236px;background:#fff;border:1px solid #e2e8f0;
+  border-radius:16px;box-shadow:0 18px 48px rgba(15,23,42,.22);padding:6px;display:none;animation:auUp .18s ease-out}
+.au-menu.au-abierta{display:block}
+.au-menu-cab{padding:10px 12px 9px;border-bottom:1px solid #eef2f7;margin-bottom:5px}
+.au-menu-cab small{display:block;font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}
+.au-menu-cab div{font:700 14px 'Inter',system-ui,sans-serif;color:#0f172a;margin-top:2px;word-break:break-all}
+.au-menu-item{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;text-align:left;padding:10px 12px;
+  border:0;background:none;border-radius:10px;font:600 13.5px 'Inter',system-ui,sans-serif;color:#334155;cursor:pointer}
+.au-menu-item:hover{background:#eef2ff;color:#4f46e5}
+.au-menu-item:focus-visible{outline:2px solid #4f46e5;outline-offset:-2px}
+.au-menu-item svg{width:16px;height:16px;flex:none}
+.au-menu-item.au-peligro:hover{background:#fef2f2;color:#b91c1c}
+
+/* ---------- Modal de gestión de usuarios ---------- */
+#au-gestion{position:fixed;inset:0;z-index:99995;background:rgba(15,23,42,.58);
+  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;
+  padding:20px;animation:auIn .18s ease-out}
+#au-gestion[hidden]{display:none}
+.au-modal{background:#fff;border-radius:20px;box-shadow:0 24px 64px rgba(15,23,42,.3);width:100%;max-width:560px;
+  max-height:min(88dvh,760px);display:flex;flex-direction:column;animation:auUp .22s cubic-bezier(.2,.8,.3,1);overflow:hidden}
+.au-modal-cab{display:flex;align-items:center;gap:12px;padding:18px 20px 14px;border-bottom:1px solid #eef2f7;flex-shrink:0}
+.au-modal-cab .au-micono{width:38px;height:38px;border-radius:12px;background:#eef2ff;color:#4f46e5;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.au-modal-cab .au-micono svg{width:19px;height:19px}
+.au-modal-cab h3{font:700 17px/1.25 'Inter',system-ui,sans-serif;color:#0f172a;margin:0}
+.au-modal-cab p{font:400 12.5px/1.4 'Inter',system-ui,sans-serif;color:#64748b;margin:3px 0 0}
+.au-modal-cab .au-cerrar{margin-left:auto;background:none;border:0;padding:7px;border-radius:9px;color:#94a3b8;cursor:pointer;display:flex}
+.au-modal-cab .au-cerrar:hover{background:#f1f5f9;color:#0f172a}
+.au-modal-cab .au-cerrar svg{width:17px;height:17px}
+.au-modal-cuerpo{padding:18px 20px 20px;overflow-y:auto}
+.au-seccion{font:700 12px 'Inter',system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#94a3b8;margin:0 0 12px}
+.au-form-alta{background:#f8fafc;border:1px solid #eef2f7;border-radius:14px;padding:14px;margin-bottom:22px}
+.au-form-alta .au-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:480px){.au-form-alta .au-grid{grid-template-columns:1fr 1fr}}
+.au-form-alta .au-grid .au-entero{grid-column:1/-1}
+.au-form-alta .au-campo{margin-bottom:0}
+.au-form-alta .au-input{padding:9px 12px;font-size:14px}
+.au-form-alta .au-acciones{margin-top:12px;display:flex;justify-content:flex-end}
+.au-form-alta .au-btn{width:auto;padding:9px 16px;font-size:13.5px}
+.au-lista{display:flex;flex-direction:column;gap:9px}
+.au-fila{border:1px solid #eef2f7;border-radius:14px;padding:11px 13px;background:#fff;transition:border-color .15s,box-shadow .15s}
+.au-fila:hover{border-color:#c7d2fe;box-shadow:0 3px 12px rgba(79,70,229,.08)}
+.au-fila-cab{display:flex;align-items:center;gap:11px}
+.au-fila-info{flex:1;min-width:0}
+.au-fila-info b{display:block;font:700 14.5px 'Inter',system-ui,sans-serif;color:#0f172a;word-break:break-all}
+.au-fila-info small{display:block;color:#94a3b8;font-size:11.5px;margin-top:2px}
+.au-badge-tu{display:inline-block;background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;font:700 10.5px 'Inter',sans-serif;
+  padding:2px 8px;border-radius:999px;margin-left:7px;vertical-align:1px}
+.au-fila-acciones{display:flex;gap:6px;flex:none}
+.au-mini{display:inline-flex;align-items:center;gap:6px;border:1px solid #e2e8f0;background:#fff;color:#475569;
+  border-radius:9px;padding:6px 10px;font:600 12.5px 'Inter',system-ui,sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap}
+.au-mini:hover{border-color:#4f46e5;color:#4f46e5;background:#eef2ff}
+.au-mini svg{width:13px;height:13px;flex:none}
+.au-mini.au-peligro:hover{border-color:#dc2626;color:#b91c1c;background:#fef2f2}
+.au-mini:disabled{opacity:.45;cursor:not-allowed}
+.au-confirmar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.au-confirmar span{font:600 12.5px 'Inter',system-ui,sans-serif;color:#b91c1c}
+.au-si{background:#dc2626;border-color:#dc2626;color:#fff}
+.au-si:hover{background:#b91c1c;border-color:#b91c1c;color:#fff}
+.au-no:hover{border-color:#64748b;color:#334155}
+.au-form-clave{margin-top:11px;padding-top:11px;border-top:1px dashed #e2e8f0;display:none}
+.au-form-clave.au-visible{display:block}
+.au-form-clave .au-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:480px){.au-form-clave .au-grid{grid-template-columns:1fr 1fr}}
+.au-form-clave .au-campo{margin-bottom:0}
+.au-form-clave .au-input{padding:9px 12px;font-size:14px}
+.au-form-clave .au-acciones{margin-top:10px;display:flex;justify-content:flex-end;gap:8px}
+.au-form-clave .au-btn{width:auto;padding:8px 14px;font-size:13px}
+.au-vacio{text-align:center;color:#94a3b8;font-size:13.5px;padding:14px 0 6px}
+.au-mini-error{color:#b91c1c;font-size:12px;margin-top:8px;display:none}
+.au-mini-error.au-visible{display:block}
+
+/* ---------- Toasts ---------- */
+.au-toast-wrap{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
+  z-index:99998;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.au-toast{background:#0f172a;color:#fff;font:600 13.5px 'Inter',system-ui,sans-serif;padding:11px 18px;border-radius:999px;
+  box-shadow:0 10px 30px rgba(15,23,42,.35);display:flex;align-items:center;gap:8px;
+  animation:auUp .25s cubic-bezier(.2,.8,.3,1);max-width:min(92vw,460px);text-align:center}
+.au-toast svg{width:15px;height:15px;flex:none}
+.au-toast.au-ok svg{color:#34d399}
+.au-toast.au-err svg{color:#f87171}
+.au-toast.au-fuera{opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s}
+
+/* ---------- Accesibilidad: menos movimiento ---------- */
+@media (prefers-reduced-motion: reduce){
+  #au-login,.au-card,.au-menu,.au-modal,.au-toast,#au-gestion{animation:none}
+  #au-login.au-cortina::before{animation:none}
+}
+
+</style>
+
+<!-- Pantalla de inicio de sesión: cubre la app hasta haber sesión válida.
+     Debe seguir siendo el PRIMER elemento del <body>: así el navegador la
+     pinta antes que cualquier contenido de la app (sin destellos).
+     El velo va SIN animación de entrada: opaco desde el primer frame, o la
+     app se vería a través de él durante la fundición (T25). -->
+<div id="au-login" role="dialog" aria-modal="true" aria-label="Iniciar sesión">
+    <div class="au-card">
+        <div class="au-tile" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="3.6" width="18" height="4.5" rx="1.6" fill="currentColor"/>
+                <rect x="3" y="10.75" width="18" height="4.5" rx="1.6" fill="currentColor" opacity=".66"/>
+                <rect x="3" y="17.9" width="9.4" height="3.8" rx="1.6" fill="currentColor" opacity=".66"/>
+                <circle cx="17.7" cy="18.9" r="4.9" fill="#ffffff"/>
+                <path d="M14.9 19.1l1.9 1.9 3.1-3.6" stroke="#4f46e5" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            </svg>
+        </div>
+        <h1 class="au-title">Rúbricas de Evaluación</h1>
+        <p class="au-sub">Acceso al generador y evaluador de rúbricas<br>Departamento de Tecnología</p>
+
+        <div id="au-banner" class="au-banner" hidden>
+            Primer acceso: todavía no existe ningún usuario. El usuario con el que inicies
+            sesión ahora se creará automáticamente y podrás añadir más desde
+            «Gestionar usuarios».
+        </div>
+
+        <form id="au-form" autocomplete="off" novalidate hidden>
+            <div class="au-campo">
+                <label for="au-user">Usuario</label>
+                <div class="au-input-wrap">
+                    <input id="au-user" class="au-input" type="text" autocomplete="username"
+                           spellcheck="false" autocapitalize="none" placeholder="Usuario">
+                </div>
+            </div>
+            <div class="au-campo">
+                <label for="au-pass">Contraseña</label>
+                <div class="au-input-wrap">
+                    <input id="au-pass" class="au-input" type="password" autocomplete="current-password" placeholder="Mínimo 6 caracteres">
+                    <button type="button" class="au-ojo" id="au-ojo" aria-label="Mostrar u ocultar la contraseña" tabindex="-1">
+                        <svg id="au-ojo-abierto" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg id="au-ojo-tachado" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" hidden><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    </button>
+                </div>
+            </div>
+            <div id="au-error" class="au-error" role="alert"></div>
+            <button type="submit" id="au-submit" class="au-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                <span id="au-submit-texto">Entrar</span>
+            </button>
+        </form>
+
+        <div id="au-error-conexion" class="au-error-conexion">
+            No se pudo conectar con la base de datos. Comprueba tu conexión a internet.
+        </div>
+    </div>
+</div>
+
+<script>
+/* T26 · Arranque tras cerrar sesión: el logout deja una marca con su hora en
+   sessionStorage; si es reciente (<15 s), este documento arranca en modo
+   cortina (velo sin tarjeta y TODO el cuerpo oculto salvo el velo) hasta que
+   el login esté listo o haya error de conexión. Se ejecuta ANTES de que se
+   parse cualquier contenido de la app: lo primero que este documento puede
+   pintar es la cortina opaca, nunca la app. La marca se consume siempre. */
+(function(){try{
+    var t=parseInt(sessionStorage.getItem('au:logout')||'0',10);
+    if(t){try{sessionStorage.removeItem('au:logout')}catch(e){}}
+    if(t&&Date.now()-t<15000){
+        document.documentElement.classList.add('au-cerrando');
+        var v=document.getElementById('au-login');
+        if(v){v.classList.add('au-cortina')}
+        window.__auTrasLogout=true;
+    }
+}catch(e){}})();
+</script>
 
     <!-- PANTALLA DE SELECCIÓN DE MATERIA -->
     <div id="home-screen" class="min-h-screen flex flex-col justify-center items-center p-4 sm:p-6">
@@ -1708,6 +2000,10 @@
                 <span class="dot"></span>
                 <span id="save-text">Guardado</span>
             </span>
+            <span class="save-state cloud-state" id="cloud-autosave-state" hidden title="Autoguardado en la nube">
+                <svg class="csvg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z"/></svg>
+                <span id="cloud-autosave-text"></span>
+            </span>
         </div>
     </header>
 
@@ -1728,8 +2024,8 @@
                     <p>2. Introduce las puntuaciones del profesor para cada alumno en cada aspecto.</p>
                     <p>3. En cada pestaña de alumno, introduce cómo ha evaluado a sus compañeros (coevaluación).</p>
                     <p>4. Pulsa «Calcular Notas» para obtener los resultados.</p>
-                    <p>5. Usa «Rúbricas guardadas» para recuperar rúbricas almacenadas en Firebase, «Exportar AutoNotas» para llevar las calificaciones a Séneca y «Exportar»/«Importar» para copias locales.</p>
-                    <p class="note">Los datos se guardan automáticamente en tu navegador.</p>
+                    <p>5. Usa «Rúbricas guardadas» para recuperar rúbricas almacenadas en Firebase, «Evaluaciones en la nube» para guardar la evaluación con sus calificaciones y continuarla en otra sesión o dispositivo, «Exportar AutoNotas» para llevar las calificaciones a Séneca y «Exportar»/«Importar» para copias locales. Con el autoguardado activo y la sesión iniciada, cada cambio se sincroniza solo en la nube.</p>
+                    <p class="note">Los datos se guardan automáticamente en tu navegador y, con la sesión iniciada, también en la nube.</p>
                 </div>
             </details>
 
@@ -1746,6 +2042,34 @@
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" aria-hidden="true"><path d="M21 12a9 9 0 11-9-9"/><path d="M21 3l-9 9"/><path d="M15 3h6v6"/></svg>
                     Abrir rúbrica guardada
                 </button>
+            </article>
+
+            <!-- Evaluaciones en la nube (continuar en otra sesión) -->
+            <article class="card saved-rubrics-card" aria-label="Evaluaciones en la nube">
+                <div class="src-info">
+                    <h2>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                        Evaluaciones en la nube
+                    </h2>
+                    <p>Guarda la evaluación completa —alumnado, rúbrica y calificaciones del profesor y de la coevaluación— en Firebase para continuarla en otra sesión o dispositivo. Con el autoguardado activo, cada cambio se sincroniza automáticamente.</p>
+                </div>
+                <div class="btn-col">
+                    <button id="cloud-save-eval-setup" class="btn" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" aria-hidden="true"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+                        Guardar evaluación actual
+                    </button>
+                    <button id="cloud-load-eval-setup" class="btn btn-sec" type="button">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" aria-hidden="true"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+                        Cargar evaluación guardada
+                    </button>
+                </div>
+                <div class="autosave-nube">
+                    <label for="autosave-nube-check">
+                        <input type="checkbox" id="autosave-nube-check" checked>
+                        <span>Autoguardado en la nube tras cada cambio</span>
+                    </label>
+                    <p id="autosave-nube-info">Cada cambio se guardará automáticamente en tu cuenta.</p>
+                </div>
             </article>
 
             <div class="steps-grid">
@@ -1788,6 +2112,19 @@
                             <input type="file" id="import-students-file" class="hidden" accept=".json,.xls,.xlsx">
                         </div>
                     </details>
+                    <details class="sub-details">
+                        <summary>
+                            Grupos guardados en la nube
+                            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                        </summary>
+                        <div class="details-content">
+                            <p class="hint">Los grupos que importas desde un archivo se guardan automáticamente en Firebase, asociados a tu usuario, para que puedas volver a cargarlos en cualquier sesión sin el archivo original. También puedes guardar la lista actual manualmente o cargar un grupo guardado.</p>
+                            <div class="btn-row">
+                                <button id="cloud-load-group" class="btn btn-sec" type="button">Cargar grupo guardado</button>
+                                <button id="cloud-save-group" class="btn btn-sec" type="button">Guardar grupo actual</button>
+                            </div>
+                        </div>
+                    </details>
                 </article>
 
                 <!-- Paso 3: Aspectos -->
@@ -1825,6 +2162,7 @@
                     </div>
                     <div id="values-list" class="items-list"></div>
                     <p class="note">El valor «NE» (No Evaluado) se añade automáticamente y no computa en los cálculos.</p>
+                    <p class="note">Con valores con intervalo («2 (1-2.9)»…) cada puntuación ofrece «✎ Ajustar…» para anotar cualquier nota exacta dentro del intervalo del nivel.</p>
                 </article>
 
                 <!-- Paso 5: Ponderación -->
@@ -1962,6 +2300,14 @@
                     <button id="open-saved-rubrics-eval" class="btn btn-sec" type="button" title="Rúbricas almacenadas en Firebase">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" aria-hidden="true"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
                         Rúbricas guardadas
+                    </button>
+                    <button id="cloud-save-eval" class="btn btn-sec" type="button" title="Guardar alumnado, rúbrica y calificaciones en la nube para continuar en otra sesión">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" aria-hidden="true"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+                        Guardar en la nube
+                    </button>
+                    <button id="cloud-load-eval" class="btn btn-sec" type="button" title="Evaluaciones guardadas en la nube">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                        Evaluaciones guardadas
                     </button>
                 </div>
                 <div class="auto-save-info">
@@ -4092,16 +4438,18 @@
             // Listeners de exportación: leen el formato del selector correspondiente
             exportButtonEl.addEventListener('click', () => {
                 const format = document.getElementById('export-format-multiple').value;
-                const criteriaToExport = rubricasData.filter(c => selectedCriterios.includes(c.id));
+                // criteriaActuales = mismo filtro + orden por código de la
+                // pantalla (1.3.1 < 1.3.2 < 1.4.1…), como el envío al evaluador
+                const criteriaToExport = criteriaActuales('multiple');
                 generateAndDownloadCSV(criteriaToExport, format);
             });
 
             exportButtonCompetenciasEl.addEventListener('click', () => {
                 const format = document.getElementById('export-format-competencias').value;
-                // Se exportan los criterios de todas las competencias seleccionadas,
-                // excepto los ocultados por el usuario con el botón ×
-                const criteriaToExport = rubricasData.filter(c =>
-                    selectedCompetencias.some(id => id == c.competencia) && !criteriosOcultos.has(c.id));
+                // criteriaActuales = los criterios de las competencias
+                // seleccionadas, excepto los ocultados con el botón ×, con el
+                // mismo orden por código que muestra la pantalla
+                const criteriaToExport = criteriaActuales('competencias');
                 generateAndDownloadCSV(criteriaToExport, format);
             });
 
@@ -5969,6 +6317,26 @@
         let hasUnsavedChanges = false;
         let saveTimeout = null;
 
+        // Autoguardado en la NUBE: cada cambio de la evaluación se sincroniza
+        // con Firebase (con un pequeño debounce) para poder continuar en otra
+        // sesión o dispositivo sin pulsar «Guardar en la nube».
+        const AUTOSAVE_NUBE_KEY = 'evaluador:autosave-nube'; // interruptor on/off
+        const AUTOSAVE_NUBE_DELAY = 2000;       // ms de calma tras el último cambio
+        const AUTOSAVE_NUBE_REINTENTO = 15000;  // ms entre reintentos ante error
+        let nubeAuto = {
+            id: null,            // id Firebase de la evaluación activa (si existe)
+            nombre: '',          // nombre con el que se guardó
+            estado: 'inactivo',  // inactivo|sin-datos|sin-sesion|off|pendiente|guardando|ok|error
+            timer: null,         // debounce del autoguardado
+            reintento: null,     // timer de reintento tras error de red
+            guardando: false,    // hay una escritura en curso
+            reintentarAlTerminar: false,
+            generacion: 0,       // se incrementa al limpiar/cargar/borrar: invalida guardados en curso
+            ultimoOk: null,      // Date del último guardado correcto
+            errorToast: false,   // no repetir el toast de error
+            suspendido: false    // true mientras se restaura una evaluación (evita ecos)
+        };
+
         // Vista y estado de UI
         let viewMode = 'cards';
         let activeStudentTab = null;
@@ -5994,6 +6362,8 @@
                         rubricDetails = rubricData.config.rubricDetails || {};
                         source = rubricData.config.source || null;
                         sourceTitle = rubricData.config.sourceTitle || source;
+                        // Continuar con la misma entrada de la nube (si la había)
+                        adoptarEvaluacionNube(rubricData.config.nubeAutosaveId || null, rubricData.config.nubeAutosaveNombre || '');
 
                         if (!values.includes('NE')) values.unshift('NE');
                         return true;
@@ -6030,6 +6400,7 @@
             updateStatusIndicators();
             if (saveTimeout) clearTimeout(saveTimeout);
             saveTimeout = setTimeout(saveToStorage, 1000);
+            programarAutosaveNube(); // cada cambio también sincroniza la nube
         }
 
         // Guardar de inmediato al cerrar u ocultar la pestaña/app:
@@ -6037,11 +6408,199 @@
         const flushPendingSave = () => {
             if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
             if (hasUnsavedChanges) saveToStorage();
+            // Nube: si hay un autoguardado pendiente, lanzarlo ya (best effort;
+            // el canal de Firebase sigue abierto al ocultarse la página)
+            if (nubeAuto.timer) {
+                clearTimeout(nubeAuto.timer); nubeAuto.timer = null;
+                ejecutarAutosaveNube();
+            }
         };
         window.addEventListener('pagehide', flushPendingSave);
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') flushPendingSave();
+            // Al volver a la app: si quedó algo pendiente o con error, reintentar
+            else if (!nubeAuto.suspendido &&
+                     (nubeAuto.estado === 'pendiente' || nubeAuto.estado === 'error' || nubeAuto.estado === 'sin-sesion')) {
+                programarAutosaveNube();
+            }
         });
+
+        // ============================================================
+        // AUTOGUARDADO EN LA NUBE (Firebase, por usuario)
+        // ============================================================
+        // - Se dispara con cada cambio (scheduleSave) tras 2 s de calma.
+        // - La evaluación activa se identifica por ID (nubeAuto.id), persistido
+        //   en rubricData.config: el mismo navegador continúa la misma entrada
+        //   de la nube sin crear duplicados.
+        // - «Continuar evaluación» y el guardado manual adoptan su entrada;
+        //   borrarla (o «Limpiar datos») desvincula el autoguardado.
+        function autosaveNubeActivado() {
+            try { return localStorage.getItem(AUTOSAVE_NUBE_KEY) !== '0'; } catch (e) { return true; }
+        }
+
+        function autosaveNubeDisponible() {
+            return !!(window.RF && typeof RF.guardarEvaluacionPorId === 'function' &&
+                window.AUTH && typeof window.AUTH.usuario === 'function' && window.AUTH.usuario());
+        }
+
+        // Nombre propuesto: «título · grupo» (el mismo del guardado manual)
+        function nombreSugeridoEvaluacion() {
+            return (evaluationName || 'Evaluación') + ' · ' +
+                (groupName && groupName !== 'Sin especificar' ? groupName : 'sin grupo');
+        }
+
+        // Vincula/desvincula la evaluación activa de su entrada en la nube
+        function adoptarEvaluacionNube(id, nombre) {
+            nubeAuto.id = id || null;
+            nubeAuto.nombre = nombre || '';
+            if (nubeAuto.id) {
+                rubricData.config.nubeAutosaveId = nubeAuto.id;
+                rubricData.config.nubeAutosaveNombre = nubeAuto.nombre;
+            } else {
+                delete rubricData.config.nubeAutosaveId;
+                delete rubricData.config.nubeAutosaveNombre;
+            }
+        }
+
+        function cancelarTimersNube() {
+            if (nubeAuto.timer) { clearTimeout(nubeAuto.timer); nubeAuto.timer = null; }
+            if (nubeAuto.reintento) { clearTimeout(nubeAuto.reintento); nubeAuto.reintento = null; }
+        }
+
+        function ponerEstadoNube(estado) {
+            nubeAuto.estado = estado;
+            actualizarChipNube();
+            actualizarInfoAutosaveNube();
+        }
+
+        // Chip de la barra superior (junto al indicador de guardado local)
+        function actualizarChipNube() {
+            const chip = document.getElementById('cloud-autosave-state');
+            const txt = document.getElementById('cloud-autosave-text');
+            if (!chip || !txt) return;
+            let visible = true, cls = 'save-state cloud-state', texto = '', title = '';
+            if (nubeAuto.estado === 'pendiente' || nubeAuto.estado === 'guardando') {
+                cls += ' unsaved';
+                texto = 'Guardando en la nube…';
+                title = 'Autoguardado en la nube: cada cambio se sincroniza con Firebase';
+            } else if (nubeAuto.estado === 'ok') {
+                cls += ' cloud-ok';
+                const h = (nubeAuto.ultimoOk && !isNaN(nubeAuto.ultimoOk))
+                    ? nubeAuto.ultimoOk.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '';
+                texto = 'Nube' + (h ? ' · ' + h : '');
+                title = 'Sincronizado en la nube' + (nubeAuto.nombre ? (': «' + nubeAuto.nombre + '»') : '');
+            } else if (nubeAuto.estado === 'error') {
+                cls += ' cloud-error';
+                texto = 'Nube · reintentando…';
+                title = 'No se pudo sincronizar con la nube: se reintentará automáticamente. Los datos siguen guardados en este navegador.';
+            } else {
+                visible = false;
+            }
+            chip.hidden = !visible;
+            chip.className = cls;
+            chip.title = title;
+            txt.textContent = texto;
+        }
+
+        // Línea de estado de la tarjeta «Evaluaciones en la nube»
+        function actualizarInfoAutosaveNube() {
+            const info = document.getElementById('autosave-nube-info');
+            if (!info) return;
+            let texto;
+            switch (nubeAuto.estado) {
+                case 'off':
+                    texto = 'Desactivado: usa «Guardar evaluación actual» para guardar manualmente.';
+                    break;
+                case 'sin-datos':
+                    texto = 'Se activará cuando la evaluación tenga alumnado y criterios.';
+                    break;
+                case 'sin-sesion':
+                    texto = 'La nube no está disponible ahora mismo; los cambios se guardan en este navegador.';
+                    break;
+                case 'pendiente':
+                case 'guardando':
+                    texto = 'Guardando cambios en la nube…';
+                    break;
+                case 'ok':
+                    texto = 'Sincronizado' + (nubeAuto.nombre ? (': «' + nubeAuto.nombre + '»') : '') + '. Cada cambio se guarda automáticamente.';
+                    break;
+                case 'error':
+                    texto = 'No se pudo sincronizar; se reintentará automáticamente. Los datos siguen guardados en este navegador.';
+                    break;
+                default:
+                    texto = 'Cada cambio se guardará automáticamente en tu cuenta de Firebase.';
+            }
+            info.textContent = texto;
+        }
+
+        function programarAutosaveNube() {
+            if (nubeAuto.suspendido) return;
+            if (!autosaveNubeActivado()) { cancelarTimersNube(); ponerEstadoNube('off'); return; }
+            if (!students.length || !aspects.length) { ponerEstadoNube('sin-datos'); return; }
+            if (!autosaveNubeDisponible()) { ponerEstadoNube('sin-sesion'); return; }
+            ponerEstadoNube('pendiente');
+            if (nubeAuto.reintento) { clearTimeout(nubeAuto.reintento); nubeAuto.reintento = null; }
+            if (nubeAuto.timer) clearTimeout(nubeAuto.timer);
+            nubeAuto.timer = setTimeout(ejecutarAutosaveNube, AUTOSAVE_NUBE_DELAY);
+        }
+
+        function programarReintentoNube() {
+            if (nubeAuto.reintento) return;
+            nubeAuto.reintento = setTimeout(function () {
+                nubeAuto.reintento = null;
+                if (!nubeAuto.suspendido && nubeAuto.estado === 'error') ejecutarAutosaveNube();
+            }, AUTOSAVE_NUBE_REINTENTO);
+        }
+
+        function ejecutarAutosaveNube() {
+            nubeAuto.timer = null;
+            if (nubeAuto.suspendido) return;
+            if (!autosaveNubeActivado() || !students.length || !aspects.length) return;
+            if (nubeAuto.guardando) { nubeAuto.reintentarAlTerminar = true; return; }
+            if (!autosaveNubeDisponible()) { ponerEstadoNube('sin-sesion'); return; }
+            ponerEstadoNube('guardando');
+            nubeAuto.guardando = true;
+            const gen = nubeAuto.generacion; // cambia si se limpia/carga/borra a mitad
+            const primeraVez = !nubeAuto.id;
+            const nombre = nubeAuto.id ? nubeAuto.nombre : nombreSugeridoEvaluacion();
+            // Misma serialización que el guardado manual: primero sincroniza
+            // la configuración local y luego poda las celdas NE del payload
+            saveToStorage();
+            const datos = JSON.stringify(serializarEvaluacionParaNube());
+            RF.guardarEvaluacionPorId(nubeAuto.id, nombre, datos, {
+                evaluationName: evaluationName,
+                groupName: groupName && groupName !== 'Sin especificar' ? groupName : '',
+                nEstudiantes: students.length,
+                nAspectos: aspects.length
+            }).then(function (res) {
+                if (gen !== nubeAuto.generacion) return; // se limpió/cargó/borró mientras se guardaba
+                adoptarEvaluacionNube(res.id, nombre);
+                nubeAuto.ultimoOk = new Date();
+                nubeAuto.errorToast = false;
+                ponerEstadoNube('ok');
+                saveToStorage(); // persiste el id adoptado para la próxima sesión
+                if (primeraVez) {
+                    RF.toast('Autoguardado en la nube activo: «' + nombre + '» se actualiza con cada cambio');
+                }
+            }).catch(function (err) {
+                if (gen !== nubeAuto.generacion) return; // error de un guardado ya obsoleto
+                ponerEstadoNube('error');
+                if (!nubeAuto.errorToast) {
+                    nubeAuto.errorToast = true;
+                    RF.toast('Autoguardado en la nube: ' + (err && err.message ? err.message : 'error') + '. Se reintentará automáticamente.', 'err');
+                }
+                programarReintentoNube();
+            }).then(function () {
+                // Este cierre es agnóstico de generación: SIEMPRE libera el
+                // candado (un guardado nuevo no puede empezar si no) y consume
+                // el reintento pendiente con el estado YA actualizado
+                nubeAuto.guardando = false;
+                if (nubeAuto.reintentarAlTerminar) {
+                    nubeAuto.reintentarAlTerminar = false;
+                    programarAutosaveNube();
+                }
+            });
+        }
 
         function updateStatusIndicators() {
             const teacherStatus = document.getElementById('teacher-status');
@@ -6106,33 +6665,109 @@
         // ============================================================
         // CÁLCULO DE NOTAS
         // ============================================================
+        // ============================================================
+        // AJUSTE FINO DE NOTA («✎ 7,3 (7-8.9)»)
+        // Los niveles etiquetados con intervalo («2 (1-2.9)»…) puntúan su
+        // prefijo, pero el profesorado puede anotar CUALQUIER nota del
+        // intervalo: esa nota exacta es la que computa en «Calcular Notas»,
+        // AutoNotas y los export (nunca la posición del nivel).
+        // ============================================================
+        const AJUSTE_MARCA = '✎ ';
+        const RE_INTERVALO = /\((\d+(?:[.,]\d+)?)\s*[-–]\s*(\d+(?:[.,]\d+)?)\)/;
+
+        // Prefijo numérico de un valor («8 (7-8.9)» → 8; «5,5 (5-6.9)» → 5,5)
+        function prefijoDeValor(v) {
+            const p = parseFloat(String(v).replace(',', '.'));
+            return isNaN(p) ? null : p;
+        }
+
+        // Intervalo de un nivel: «2 (1-2.9)» → {min:1, max:2.9, texto:'(1-2.9)'}
+        // «0 (No entregado)» y los cualitativos no tienen intervalo → null
+        function intervaloDeValor(v) {
+            const m = String(v || '').match(RE_INTERVALO);
+            if (!m) return null;
+            const min = parseFloat(m[1].replace(',', '.'));
+            const max = parseFloat(m[2].replace(',', '.'));
+            if (isNaN(min) || isNaN(max) || max < min) return null;
+            return { min: min, max: max, texto: m[0] };
+        }
+
+        // ¿La escala permite el ajuste fino? Solo con niveles etiquetados
+        // con nota numérica («2 (1-2.9)», formatos del generador). Las
+        // listas numéricas puras (1, 5, 10) escalan linealmente y las
+        // cualitativas (Excelente…) no tienen intervalo: sin ajuste.
+        function escalaConIntervalos() {
+            const sinNE = values.filter(v => v !== 'NE');
+            if (!sinNE.length) return false;
+            if (sinNE.every(v => !isNaN(v))) return false; // numérica pura → ruta lineal
+            return sinNE.every(v => prefijoDeValor(v) !== null);
+        }
+
+        // Niveles con intervalo ajustable (para mostrar «✎ Ajustar…»)
+        function nivelesConIntervalo() {
+            return values.filter(v => v !== 'NE' && intervaloDeValor(v));
+        }
+
+        // ¿Es un valor con ajuste fino? («✎ 7,3 (7-8.9)») Se distingue así
+        // de los huérfanos legados (etiquetas de niveles retirados), que se
+        // muestran como NE y no computan (criterio de la ronda T21-F3).
+        function esValorAjustado(v) {
+            if (typeof v !== 'string' || v.indexOf(AJUSTE_MARCA) !== 0) return false;
+            if (!escalaConIntervalos()) return false;
+            return prefijoDeValor(v.slice(AJUSTE_MARCA.length)) !== null;
+        }
+
+        // Nota ajustada canónica: coma decimal, como el resto de la app
+        function crearValorAjustado(nota, intervalo) {
+            return AJUSTE_MARCA + String(nota).replace('.', ',') + ' ' + intervalo.texto;
+        }
+
         // Convierte un valor a la escala 0-10 (ignora "NE")
         function scaleScore(score) {
             if (score === 'NE') return 0;
+            // Nota ajustada («✎ 7,3 (7-8.9)»): la nota es la que escribió
+            // el profesorado dentro del intervalo del nivel elegido
+            if (typeof score === 'string' && score.indexOf(AJUSTE_MARCA) === 0) {
+                const nAj = prefijoDeValor(score.slice(AJUSTE_MARCA.length));
+                return nAj === null ? 0 : nAj.toFixed(2);
+            }
             if (values.length === 0) return 0;
 
-            // Si los valores son numéricos, escalamos linealmente
-            // (NE se guarda al principio de la lista: se ignora al decidir)
             const sinNE = values.filter(v => v !== 'NE');
-            // La escala lineal solo tiene sentido si el propio valor es numérico
-            // (una lista mixta como [1, «Cinco», 10] usa la ruta posicional)
-            if (sinNE.length > 0 && !isNaN(sinNE[0]) && !isNaN(score)) {
-                const numeric = values.filter(v => v !== 'NE' && !isNaN(v));
-                if (numeric.length > 0) {
-                    const minValue = Math.min(...numeric.map(Number));
-                    const maxValue = Math.max(...numeric.map(Number));
-                    if (maxValue > minValue) {
-                        return ((Number(score) - minValue) / (maxValue - minValue) * 10).toFixed(2);
-                    }
+            if (sinNE.length === 0) return 0;
+
+            // Ruta 1 — lista numérica pura (1, 5, 10…): escala lineal min→max,
+            // como la app original. Una lista MIXTA (1, «Cinco», 10) no entra
+            // aquí: se puntúa por posición, igual que como se pinta en pantalla.
+            if (sinNE.every(v => !isNaN(v)) && !isNaN(score)) {
+                const numeric = sinNE.map(Number);
+                const minValue = Math.min(...numeric);
+                const maxValue = Math.max(...numeric);
+                if (maxValue > minValue) {
+                    return ((Number(score) - minValue) / (maxValue - minValue) * 10).toFixed(2);
                 }
+                return '10'; // un único valor (o todos iguales) → 10
             }
 
-            // Valores cualitativos (o etiquetados): puntuación por posición
-            const validValues = values.filter(v => v !== 'NE');
-            const index = validValues.indexOf(score);
+            // Ruta 2 — valores etiquetados con su nota («8 (7-8.9)», «0 (No
+            // entregado)»…, como los envía el generador): la nota es el
+            // prefijo numérico, la misma que ve el profesorado y la que usan
+            // la rúbrica de Classroom (10, 8, 6, 4, 2) y AutoNotas. Antes se
+            // puntuaban por posición («8 (7-8.9)» → 7,50) y la nota final
+            // quedaba distorsionada respecto a lo elegido en pantalla.
+            const prefijoDe = prefijoDeValor; // helper compartido con el ajuste fino
+            if (sinNE.every(v => prefijoDe(v) !== null)) {
+                const n = prefijoDe(score);
+                if (n !== null) return n.toFixed(2);
+                return 0;
+            }
+
+            // Ruta 3 — valores cualitativos: puntuación por posición (como la
+            // app original)
+            const index = sinNE.indexOf(score);
             if (index === -1) return 0;
-            if (validValues.length === 1) return '10';
-            return ((index / (validValues.length - 1)) * 10).toFixed(2);
+            if (sinNE.length === 1) return '10';
+            return ((index / (sinNE.length - 1)) * 10).toFixed(2);
         }
 
         // ============================================================
@@ -6165,8 +6800,10 @@
             return d && d.titulo ? d.titulo : aspect;
         }
 
-        // Crea un <select> de puntuación con color según la posición del valor
-        function buildScoreSelect(current, onChange) {
+        // Crea un <select> de puntuación con color según la posición del valor.
+        // etiqueta (opcional): contexto para el diálogo de ajuste fino
+        // (p. ej. «Ana · CYR.1.3.1» o «Ana evalúa a Bea · TYD.2.1.1»).
+        function buildScoreSelect(current, onChange, etiqueta) {
             const select = document.createElement('select');
             select.className = 'score-select';
             values.forEach(v => {
@@ -6176,9 +6813,31 @@
                 if (v === 'NE') opt.className = 'ne-option';
                 select.appendChild(opt);
             });
-            select.value = (current && values.includes(current)) ? current : 'NE';
+            // Valor ajustado actual («✎ 7,3 (7-8.9)») como opción visible
+            if (current && esValorAjustado(current)) {
+                const optAj = document.createElement('option');
+                optAj.value = current;
+                optAj.textContent = current;
+                optAj.className = 'ajuste-option';
+                select.appendChild(optAj);
+            }
+            // Ajuste fino: cualquier nota del intervalo (solo escalas etiquetadas)
+            if (escalaConIntervalos() && nivelesConIntervalo().length) {
+                const optAjustar = document.createElement('option');
+                optAjustar.value = '__ajustar__';
+                optAjustar.textContent = '✎ Ajustar…';
+                optAjustar.className = 'ajuste-option';
+                select.appendChild(optAjustar);
+            }
+            select.value = (current && (values.includes(current) || esValorAjustado(current))) ? current : 'NE';
+            select.dataset.valorPrevio = select.value;
             paintScoreSelect(select);
             select.addEventListener('change', () => {
+                if (select.value === '__ajustar__') {
+                    abrirAjusteFino(select, onChange, etiqueta);
+                    return; // el diálogo restaura la selección anterior
+                }
+                select.dataset.valorPrevio = select.value;
                 paintScoreSelect(select);
                 onChange(select.value);
                 scheduleSave();
@@ -6187,6 +6846,19 @@
         }
 
         function paintScoreSelect(select) {
+            // Nota ajustada: color según su posición en la escala numérica
+            if (esValorAjustado(select.value)) {
+                const nota = prefijoDeValor(select.value.slice(AJUSTE_MARCA.length));
+                const prefijos = values.filter(v => v !== 'NE')
+                    .map(prefijoDeValor).filter(n => n !== null);
+                if (nota !== null && prefijos.length) {
+                    const mn = Math.min(...prefijos), mx = Math.max(...prefijos);
+                    const p = mx > mn ? (nota - mn) / (mx - mn) : 1;
+                    const pc = Math.max(0, Math.min(1, isNaN(p) ? 1 : p));
+                    select.className = 'score-select score-ajustado score-q' + Math.min(4, Math.round(pc * 4));
+                    return;
+                }
+            }
             const validCount = values.length - 1;
             const idx = values.indexOf(select.value);
             if (idx <= 0 || validCount <= 0) {
@@ -6206,6 +6878,217 @@
                 if (v === 'NE') opt.className = 'ne-option';
                 select.appendChild(opt);
             });
+        }
+
+        // ============================================================
+        // DIÁLOGO DE AJUSTE FINO (nota exacta dentro del intervalo)
+        // ============================================================
+        let ajusteFinoAbierto = null; // { overlay, escHandler }
+
+        function cerrarAjusteFino() {
+            if (!ajusteFinoAbierto) return;
+            document.removeEventListener('keydown', ajusteFinoAbierto.escHandler);
+            if (ajusteFinoAbierto.overlay && ajusteFinoAbierto.overlay.parentNode) {
+                ajusteFinoAbierto.overlay.parentNode.removeChild(ajusteFinoAbierto.overlay);
+            }
+            ajusteFinoAbierto = null;
+        }
+
+        // Devuelve el <select> a la última opción elegida (tras abrir el
+        // diálogo con «✎ Ajustar…» seleccionado)
+        function restaurarSeleccion(select) {
+            const previo = select.dataset.valorPrevio || 'NE';
+            if (Array.from(select.options).some(o => o.value === previo)) select.value = previo;
+            paintScoreSelect(select);
+        }
+
+        function abrirAjusteFino(select, onChange, etiqueta) {
+            const bandas = nivelesConIntervalo();
+            if (!bandas.length || !escalaConIntervalos()) {
+                // No debería alcanzarse (la opción solo se ofrece cuando la
+                // escala tiene niveles con intervalo), pero por seguridad:
+                restaurarSeleccion(select);
+                alert('Esta escala no tiene niveles con intervalo numérico que ajustar.');
+                return;
+            }
+            cerrarAjusteFino();
+
+            const previo = select.dataset.valorPrevio || 'NE';
+            restaurarSeleccion(select);
+
+            // Nivel y nota iniciales del diálogo
+            let bandaInicial = null;
+            let notaInicial = null;
+            if (esValorAjustado(previo)) {
+                notaInicial = prefijoDeValor(previo.slice(AJUSTE_MARCA.length));
+                const mInt = previo.match(RE_INTERVALO);
+                const textoInt = mInt ? mInt[0] : null;
+                bandaInicial = bandas.find(b => textoInt && intervaloDeValor(b).texto === textoInt) ||
+                    bandas.find(b => { const i = intervaloDeValor(b); return notaInicial !== null && notaInicial >= i.min && notaInicial <= i.max; }) ||
+                    bandas[0];
+            } else if (values.includes(previo) && intervaloDeValor(previo)) {
+                bandaInicial = previo;
+                notaInicial = prefijoDeValor(previo);
+            }
+            if (!bandaInicial) bandaInicial = bandas[0];
+            if (notaInicial === null || isNaN(notaInicial)) notaInicial = prefijoDeValor(bandaInicial);
+
+            const fmtNota = n => String(n).replace('.', ',');
+            const overlay = document.createElement('div');
+            overlay.id = 'ajuste-fino-overlay';
+            overlay.className = 'modal-overlay';
+            overlay.innerHTML =
+                '<div class="modal" role="dialog" aria-modal="true" aria-labelledby="af-title">' +
+                '  <div class="modal-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="27" height="27"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></div>' +
+                '  <h2 id="af-title">Ajustar nota exacta</h2>' +
+                '  <p class="modal-sub">' + (etiqueta ? __escHTML(etiqueta) : 'Nivel con ajuste fino') + '</p>' +
+                '  <div class="modal-body">' +
+                '    <div class="form-group"><label for="af-banda">Nivel del intervalo</label>' +
+                '      <select id="af-banda" style="width:100%"></select></div>' +
+                '    <div class="form-group"><label for="af-nota" id="af-nota-label">Nota</label>' +
+                '      <input type="text" inputmode="decimal" id="af-nota" class="af-input" autocomplete="off">' +
+                '      <p class="af-hint" id="af-hint"></p>' +
+                '      <p class="af-aviso" id="af-aviso" hidden></p>' +
+                '      <p class="af-error" id="af-error"></p>' +
+                '    </div>' +
+                '    <p class="note">La nota ajustada sustituye a la del nivel: con «2 (1-2.9)» y ajuste 2,7, la puntuación es 2,70 en «Calcular Notas», AutoNotas y los export.</p>' +
+                '  </div>' +
+                '  <div class="modal-actions">' +
+                (esValorAjustado(previo) ? '<button type="button" class="btn btn-sec" id="af-quitar" style="margin-right:auto">Quitar ajuste</button>' : '') +
+                '    <button type="button" class="btn btn-sec" id="af-cancelar">Cancelar</button>' +
+                '    <button type="button" class="btn btn-primary" id="af-aplicar">Aplicar nota</button>' +
+                '  </div>' +
+                '</div>';
+
+            document.getElementById('evaluador-root').appendChild(overlay);
+
+            const selBanda = overlay.querySelector('#af-banda');
+            bandas.forEach(b => {
+                const o = document.createElement('option');
+                o.value = b;
+                o.textContent = b;
+                selBanda.appendChild(o);
+            });
+            selBanda.value = bandaInicial;
+
+            const inpNota = overlay.querySelector('#af-nota');
+            const lblNota = overlay.querySelector('#af-nota-label');
+            const zonaHint = overlay.querySelector('#af-hint');
+            const zonaAviso = overlay.querySelector('#af-aviso');
+            const zonaErr = overlay.querySelector('#af-error');
+            const bAplicar = overlay.querySelector('#af-aplicar');
+            const bQuitar = overlay.querySelector('#af-quitar');
+            const bCancelar = overlay.querySelector('#af-cancelar');
+
+            function pintarRango() {
+                const i = intervaloDeValor(selBanda.value);
+                lblNota.textContent = 'Nota (nivel ' + selBanda.value + ' · intervalo ' + fmtNota(i.min) + ' – ' + fmtNota(i.max) + ')';
+                zonaHint.textContent = 'Escribe cualquier nota entre 0 y 10; la del intervalo es la orientativa del nivel.';
+                validar();
+            }
+
+            // Devuelve la nota si es aplicable, o null (con los mensajes
+            // correspondientes pintados). Fuera del intervalo del nivel solo
+            // avisa: la nota explícita del profesorado prevalece.
+            function validar() {
+                const i = intervaloDeValor(selBanda.value);
+                const txt = inpNota.value.trim();
+                zonaErr.textContent = '';
+                zonaAviso.hidden = true;
+                inpNota.classList.remove('af-input-err');
+                bAplicar.disabled = false;
+                if (!txt) { bAplicar.disabled = true; return null; }
+                const n = parseFloat(txt.replace(',', '.'));
+                if (isNaN(n)) {
+                    zonaErr.textContent = 'Escribe un número (p. ej. 2,7).';
+                    inpNota.classList.add('af-input-err');
+                    bAplicar.disabled = true;
+                    return null;
+                }
+                if (n < 0 || n > 10) {
+                    zonaErr.textContent = 'La nota debe estar entre 0 y 10.';
+                    inpNota.classList.add('af-input-err');
+                    bAplicar.disabled = true;
+                    return null;
+                }
+                if (n < i.min - 1e-9 || n > i.max + 1e-9) {
+                    zonaAviso.textContent = fmtNota(n) + ' queda fuera del intervalo del nivel (' + fmtNota(i.min) + ' – ' + fmtNota(i.max) + '). Se guardará la nota exacta indicada.';
+                    zonaAviso.hidden = false;
+                }
+                return n;
+            }
+
+            inpNota.value = notaInicial !== null ? fmtNota(notaInicial) : '';
+            pintarRango();
+            inpNota.addEventListener('input', validar);
+            inpNota.addEventListener('keydown', e => { if (e.key === 'Enter') aplicar(); });
+            selBanda.addEventListener('change', () => {
+                // Al cambiar de nivel: conservar la nota si sigue dentro del
+                // nuevo intervalo; si no, partir del prefijo del nivel
+                const i = intervaloDeValor(selBanda.value);
+                const n = parseFloat(inpNota.value.trim().replace(',', '.'));
+                if (isNaN(n) || n < i.min - 1e-9 || n > i.max + 1e-9) {
+                    inpNota.value = fmtNota(prefijoDeValor(selBanda.value));
+                }
+                pintarRango();
+            });
+
+            function aplicar() {
+                const i = intervaloDeValor(selBanda.value);
+                const n = validar();
+                if (n === null) { inpNota.focus(); return; }
+                const nota = Math.round((n + Number.EPSILON) * 100) / 100;
+                const nuevo = crearValorAjustado(nota, i);
+                // Sustituir la opción ajustada anterior por la nueva
+                Array.from(select.options).forEach(o => {
+                    if (o.value !== nuevo && o.value.indexOf(AJUSTE_MARCA) === 0) o.remove();
+                });
+                if (!Array.from(select.options).some(o => o.value === nuevo)) {
+                    const optAj = document.createElement('option');
+                    optAj.value = nuevo;
+                    optAj.textContent = nuevo;
+                    optAj.className = 'ajuste-option';
+                    const ancla = select.querySelector('option[value="__ajustar__"]');
+                    if (ancla) select.insertBefore(optAj, ancla);
+                    else select.appendChild(optAj);
+                }
+                select.value = nuevo;
+                select.dataset.valorPrevio = nuevo;
+                paintScoreSelect(select);
+                onChange(nuevo);
+                scheduleSave();
+                cerrarAjusteFino();
+            }
+
+            function quitarAjuste() {
+                let destino = 'NE';
+                if (esValorAjustado(select.dataset.valorPrevio || '')) {
+                    const prev = select.dataset.valorPrevio;
+                    const mInt = prev.match(RE_INTERVALO);
+                    const textoInt = mInt ? mInt[0] : null;
+                    const notaPrev = prefijoDeValor(prev.slice(AJUSTE_MARCA.length));
+                    destino = values.find(v => v !== 'NE' && intervaloDeValor(v) && textoInt && intervaloDeValor(v).texto === textoInt) ||
+                        values.find(v => { const i = intervaloDeValor(v); return i && notaPrev !== null && notaPrev >= i.min && notaPrev <= i.max; }) ||
+                        'NE';
+                }
+                select.value = destino;
+                select.dataset.valorPrevio = destino;
+                paintScoreSelect(select);
+                onChange(destino);
+                scheduleSave();
+                cerrarAjusteFino();
+            }
+
+            const escHandler = e => { if (e.key === 'Escape') cerrarAjusteFino(); };
+            document.addEventListener('keydown', escHandler);
+            overlay.addEventListener('mousedown', e => { if (e.target === overlay) cerrarAjusteFino(); });
+            bCancelar.addEventListener('click', cerrarAjusteFino);
+            bAplicar.addEventListener('click', aplicar);
+            if (bQuitar) bQuitar.addEventListener('click', quitarAjuste);
+
+            ajusteFinoAbierto = { overlay: overlay, escHandler: escHandler };
+            inpNota.focus();
+            inpNota.select();
         }
 
         function openRubricAspect(index) {
@@ -6408,14 +7291,14 @@
             Object.values(rubricData.teacher).forEach(fila => {
                 Object.keys(fila).forEach(a => {
                     if (!activos.has(a)) delete fila[a];
-                    else if (!validos.has(fila[a])) fila[a] = 'NE';
+                    else if (!validos.has(fila[a]) && !esValorAjustado(fila[a])) fila[a] = 'NE';
                 });
             });
             Object.values(rubricData.students).forEach(evaluador => {
                 Object.values(evaluador).forEach(evaluado => {
                     Object.keys(evaluado).forEach(a => {
                         if (!activos.has(a)) delete evaluado[a];
-                        else if (!validos.has(evaluado[a])) evaluado[a] = 'NE';
+                        else if (!validos.has(evaluado[a]) && !esValorAjustado(evaluado[a])) evaluado[a] = 'NE';
                     });
                 });
             });
@@ -6462,7 +7345,7 @@
             abrirSelectorGrupos();
         }
 
-        function aplicarGrupoAlumnado(grupo) {
+        function aplicarGrupoAlumnado(grupo, opciones) {
             let reemplazar;
             if (students.length > 0) {
                 reemplazar = confirm(
@@ -6489,6 +7372,9 @@
             let msg = 'Alumnado importado correctamente. Ahora hay ' + students.length + ' estudiantes en el grupo "' + groupName + '".';
             if (grupo.nCuentas > 0) msg += '\n\n(' + grupo.nCuentas + ' estudiantes con cuenta de correo registrada; la aplicación solo utiliza los nombres.)';
             alert(msg);
+            // Autoguardado del grupo en la nube (asociado al usuario con
+            // sesión) para poder recargarlo en otra sesión sin el archivo
+            if (!opciones || !opciones.desdeNube) autoGuardarGrupoNube(groupName, students.slice());
         }
 
         // --- Selector de grupos cuando el archivo contiene varios ---
@@ -6531,6 +7417,174 @@
             gruposImportPendientes = null;
             document.getElementById('group-picker-overlay').classList.add('hidden');
             if (grupo) aplicarGrupoAlumnado(grupo);
+        }
+
+        // ============================================================
+        // GRUPOS Y EVALUACIONES EN LA NUBE (Firebase · por usuario)
+        // ============================================================
+        // Cargar un grupo guardado reutiliza el flujo de importación:
+        // pregunta si reemplazar o añadir, actualiza el nombre del
+        // grupo, re-renderiza y guarda. desdeNube evita volver a
+        // guardar en la nube lo que acaba de llegar de ella.
+        function aplicarGrupoGuardado(g) {
+            aplicarGrupoAlumnado(
+                { clase: g.nombre, alumnos: Array.isArray(g.alumnos) ? g.alumnos : [] },
+                { desdeNube: true }
+            );
+        }
+
+        // Autoguardado silencioso del grupo recién cargado desde archivo
+        function autoGuardarGrupoNube(nombre, alumnos) {
+            if (!window.RF || !window.AUTH || typeof window.AUTH.usuario !== 'function') return;
+            if (!window.AUTH.usuario()) return;
+            if (!nombre || nombre === 'Sin especificar' || !Array.isArray(alumnos) || !alumnos.length) return;
+            RF.guardarGrupo(nombre, alumnos).then(function () {
+                RF.toast('Grupo «' + nombre + '» guardado en la nube');
+            }).catch(function (err) {
+                RF.toast('No se pudo guardar el grupo en la nube: ' + (err && err.message ? err.message : 'error'), 'err');
+            });
+        }
+
+        function guardarGrupoActualEnNube() {
+            if (!students.length) { alert('Añade primero alumnado a la lista antes de guardar el grupo.'); return; }
+            if (!window.RF) { alert('El guardado en la nube no está disponible ahora mismo.'); return; }
+            const sugerido = (groupName && groupName !== 'Sin especificar') ? groupName : ('Grupo de ' + students.length);
+            RF.abrirDialogoGuardarGrupo(sugerido, students.slice());
+        }
+
+        function abrirGestorGruposNube() {
+            if (!window.RF) { alert('El guardado en la nube no está disponible ahora mismo.'); return; }
+            RF.abrirGestorGrupos({ onCargar: aplicarGrupoGuardado });
+        }
+
+        // La evaluación se serializa SIN las celdas NE (al cargar se
+        // reconstruyen con ensureDataStructures): payload mucho más ligero
+        function serializarEvaluacionParaNube() {
+            const copia = {
+                config: JSON.parse(JSON.stringify(rubricData.config || {})),
+                teacher: {},
+                students: {}
+            };
+            copia.config.students = students.slice();
+            copia.config.aspects = aspects.slice();
+            copia.config.values = values.slice();
+            copia.config.teacherWeight = teacherWeight;
+            copia.config.evaluationName = evaluationName;
+            copia.config.groupName = groupName;
+            copia.config.rubricDetails = JSON.parse(JSON.stringify(rubricDetails || {}));
+            copia.config.source = source;
+            copia.config.sourceTitle = sourceTitle;
+            const podaFila = fila => {
+                const limpia = {};
+                Object.keys(fila || {}).forEach(a => { if (fila[a] && fila[a] !== 'NE') limpia[a] = fila[a]; });
+                return limpia;
+            };
+            Object.keys(rubricData.teacher || {}).forEach(al => {
+                const limpia = podaFila(rubricData.teacher[al]);
+                if (Object.keys(limpia).length) copia.teacher[al] = limpia;
+            });
+            Object.keys(rubricData.students || {}).forEach(evaluador => {
+                const limpiaEval = {};
+                Object.keys(rubricData.students[evaluador] || {}).forEach(evaluado => {
+                    const limpia = podaFila(rubricData.students[evaluador][evaluado]);
+                    if (Object.keys(limpia).length) limpiaEval[evaluado] = limpia;
+                });
+                if (Object.keys(limpiaEval).length) copia.students[evaluador] = limpiaEval;
+            });
+            return copia;
+        }
+
+        function guardarEvaluacionEnNube() {
+            if (!window.RF) { alert('El guardado en la nube no está disponible ahora mismo.'); return; }
+            if (!students.length || !aspects.length) {
+                alert('Añade alumnado y aspectos (criterios) antes de guardar la evaluación.');
+                return;
+            }
+            RF.abrirDialogoGuardarEvaluacion({
+                nombreSugerido: nombreSugeridoEvaluacion(),
+                resumen: {
+                    evaluationName: evaluationName,
+                    grupo: groupName && groupName !== 'Sin especificar' ? groupName : 'sin grupo',
+                    nEstudiantes: students.length,
+                    nAspectos: aspects.length
+                },
+                obtenerDatos: function () {
+                    // Sincroniza la configuración con los valores en pantalla
+                    // antes de serializar (puede haber cambios sin volcar aún)
+                    saveToStorage();
+                    return JSON.stringify(serializarEvaluacionParaNube());
+                },
+                // El autoguardado continúa sobre la entrada recién guardada
+                alGuardar: function (id, nombre) {
+                    adoptarEvaluacionNube(id, nombre);
+                    nubeAuto.ultimoOk = new Date();
+                    nubeAuto.errorToast = false;
+                    ponerEstadoNube('ok');
+                    saveToStorage();
+                }
+            });
+        }
+
+        function abrirGestorEvaluacionesNube() {
+            if (!window.RF) { alert('El guardado en la nube no está disponible ahora mismo.'); return; }
+            RF.abrirGestorEvaluaciones({
+                onCargar: cargarEvaluacionDeNube,
+                // Si se borra la evaluación activa, el autoguardado queda
+                // desvinculado (no debe resurrect la entrada borrada)
+                alBorrar: function (id) {
+                    if (nubeAuto.id && id === nubeAuto.id) {
+                        cancelarTimersNube();
+                        adoptarEvaluacionNube(null, '');
+                        nubeAuto.generacion++; // invalida los guardados en curso
+                        ponerEstadoNube(autosaveNubeActivado() ? 'inactivo' : 'off');
+                    }
+                }
+            });
+        }
+
+        // Restaurar una evaluación guardada en la nube (mismo camino que
+        // «Importar datos», pero desde Firebase): configuración + vistas
+        function cargarEvaluacionDeNube(reg) {
+            let datos = null;
+            try {
+                datos = typeof reg.datos === 'string' ? JSON.parse(reg.datos) : reg.datos;
+            } catch (e) { datos = null; }
+            if (!datos || !datos.config || typeof datos.teacher !== 'object' || typeof datos.students !== 'object') {
+                alert('La evaluación guardada «' + (reg.nombre || '') + '» está dañada o tiene un formato no reconocido.');
+                return;
+            }
+            const hayDatos = students.length > 0 || aspects.length > 0;
+            if (hayDatos && !confirm('¿Cargar la evaluación «' + (reg.nombre || '') + '»?\n\nSe reemplazarán los datos actuales de este navegador (alumnado, rúbrica y calificaciones).')) return;
+
+            // Sin ecos: mientras se restaura, el autoguardado no debe
+            // reescribir en la nube lo que acabamos de leer de ella
+            nubeAuto.suspendido = true;
+            nubeAuto.generacion++; // invalida guardados en curso de la evaluación anterior
+            try {
+                rubricData = datos;
+                rubricData.teacher = rubricData.teacher || {};
+                rubricData.students = rubricData.students || {};
+                // La entrada cargada pasa a ser la evaluación activa del
+                // autoguardado: los próximos cambios la actualizarán
+                adoptarEvaluacionNube(reg.id, reg.nombre);
+                applyConfig(rubricData.config);
+                lastResults = null;
+                activeStudentTab = null;
+                document.getElementById('results-section').classList.add('hidden');
+
+                if (students.length > 0 && aspects.length > 0) {
+                    showEvaluationSection(); // reconstruye vistas y guarda
+                } else {
+                    saveToStorage();
+                    showSetupSection();
+                }
+            } finally {
+                nubeAuto.suspendido = false;
+            }
+            nubeAuto.ultimoOk = null;
+            nubeAuto.errorToast = false;
+            ponerEstadoNube(nubeAuto.id ? 'ok' : 'inactivo');
+            alert('Evaluación «' + (reg.nombre || '') + '» cargada.\n\nPuedes continuar donde la dejaste: las calificaciones del profesor y de la coevaluación se han restaurado.');
         }
 
         // ============================================================
@@ -6660,6 +7714,7 @@
 
             ensureDataStructures();
             saveToStorage();
+            programarAutosaveNube(); // la rúbrica recibida es un cambio
 
             renderSetupLists();
             syncSetupInputs();
@@ -6869,7 +7924,7 @@
                         if (!rubricData.teacher[student]) rubricData.teacher[student] = {};
                         rubricData.teacher[student][aspect] = v;
                         updateTeacherProgressBadges();
-                    });
+                    }, student + ' · ' + chipAspectLabel(aspect));
                     row.appendChild(label);
                     row.appendChild(select);
                     list.appendChild(row);
@@ -6919,7 +7974,7 @@
                     cell.appendChild(buildScoreSelect(current, v => {
                         if (!rubricData.teacher[student]) rubricData.teacher[student] = {};
                         rubricData.teacher[student][aspect] = v;
-                    }));
+                    }, student + ' · ' + chipAspectLabel(aspect)));
                     row.appendChild(cell);
                 });
 
@@ -7126,7 +8181,7 @@
                             if (!rubricData.students[student]) rubricData.students[student] = {};
                             if (!rubricData.students[student][evaluated]) rubricData.students[student][evaluated] = {};
                             rubricData.students[student][evaluated][aspect] = v;
-                        }));
+                        }, student + ' evalúa a ' + evaluated + ' · ' + chipAspectLabel(aspect)));
                         row.appendChild(cell);
                     });
                     tbody.appendChild(row);
@@ -7172,7 +8227,7 @@
                             if (!rubricData.students[student]) rubricData.students[student] = {};
                             if (!rubricData.students[student][evaluated]) rubricData.students[student][evaluated] = {};
                             rubricData.students[student][evaluated][aspect] = v;
-                        });
+                        }, student + ' evalúa a ' + evaluated + ' · ' + chipAspectLabel(aspect));
                         row.appendChild(label);
                         row.appendChild(select);
                         list.appendChild(row);
@@ -7227,7 +8282,10 @@
                 if (rubricData.teacher[student]) {
                     aspects.forEach(aspect => {
                         const v = rubricData.teacher[student][aspect];
-                        if (v && v !== 'NE') {
+                        // Solo cuentan los valores de la lista actual: una celda
+                        // huérfana (valor eliminado, datos legados) se muestra
+                        // como NE y no debe entrar en la media
+                        if (v && v !== 'NE' && (values.includes(v) || esValorAjustado(v))) {
                             teacherScoreSum += parseFloat(scaleScore(v));
                             teacherAspectCount++;
                         }
@@ -7241,7 +8299,8 @@
                         let evaluatorScoreSum = 0, evaluatorAspectCount = 0;
                         aspects.forEach(aspect => {
                             const v = rubricData.students[evaluator][student][aspect];
-                            if (v && v !== 'NE') {
+                            // Igual que el profesorado: valores huérfanos = NE
+                            if (v && v !== 'NE' && (values.includes(v) || esValorAjustado(v))) {
                                 evaluatorScoreSum += parseFloat(scaleScore(v));
                                 evaluatorAspectCount++;
                             }
@@ -7445,6 +8504,10 @@
                             createCoevaluationBulkActions();
                         }
                         saveToStorage();
+                        // La importación es un cambio: sincronizar la nube (y
+                        // adoptar la entrada que traiga el propio archivo)
+                        adoptarEvaluacionNube(rubricData.config.nubeAutosaveId || null, rubricData.config.nubeAutosaveNombre || '');
+                        programarAutosaveNube();
                         alert('Datos importados correctamente');
                     } else {
                         alert('El archivo no tiene el formato correcto');
@@ -7468,6 +8531,7 @@
                         applyConfig(importedConfig);
                         initializeData();
                         saveToStorage();
+                        programarAutosaveNube(); // la rúbrica y los valores han cambiado
                         alert('Configuración importada correctamente');
                     } else {
                         alert('El archivo de configuración no tiene el formato correcto');
@@ -7482,6 +8546,12 @@
 
         function clearData() {
             if (confirm('¿Estás seguro de que quieres limpiar todos los datos? Esta acción no se puede deshacer.')) {
+                // El autoguardado en la nube queda desvinculado: al empezar de
+                // cero, el siguiente cambio creará una entrada nueva
+                cancelarTimersNube();
+                adoptarEvaluacionNube(null, '');
+                nubeAuto.generacion++; // invalida los guardados en curso
+                ponerEstadoNube(autosaveNubeActivado() ? 'inactivo' : 'off');
                 localStorage.removeItem(STORAGE_KEY);
                 students = [];
                 aspects = [];
@@ -7682,11 +8752,14 @@
             return __escHTML(s); // utilidad compartida: implementación única
         }
 
-        /** Nota 0-10 de un valor de aspecto («8 (7-8.9)» → 8; cualitativos → escala posicional) */
+        /** Nota 0-10 de un valor de aspecto: SIEMPRE la misma que usa
+         *  «Calcular Notas» (scaleScore), para que las columnas de AutoNotas
+         *  coincidan con la tabla de resultados. Las notas ajustadas
+         *  («✎ 7,3 (7-8.9)») se exportan con su nota exacta; los valores
+         *  fuera de la lista actual (huérfanos, que en pantalla se ven como
+         *  NE) no se exportan. */
         function anNotaDeAspecto(v) {
-            if (!v || v === 'NE') return null;
-            const p = parseFloat(String(v).replace(',', '.'));
-            if (!isNaN(p)) return p;
+            if (!v || v === 'NE' || (!values.includes(v) && !esValorAjustado(v))) return null;
             const q = parseFloat(scaleScore(v));
             return isNaN(q) ? null : q;
         }
@@ -7958,6 +9031,29 @@
                 if (e.target === e.currentTarget) cerrarSelectorGrupos();
             });
 
+            // Grupos y evaluaciones en la nube (Firebase, por usuario)
+            document.getElementById('cloud-save-group').addEventListener('click', guardarGrupoActualEnNube);
+            document.getElementById('cloud-load-group').addEventListener('click', abrirGestorGruposNube);
+            document.getElementById('cloud-save-eval-setup').addEventListener('click', guardarEvaluacionEnNube);
+            document.getElementById('cloud-load-eval-setup').addEventListener('click', abrirGestorEvaluacionesNube);
+
+            // Interruptor del autoguardado en la nube (persistido en localStorage)
+            const chkAutosaveNube = document.getElementById('autosave-nube-check');
+            if (chkAutosaveNube) {
+                chkAutosaveNube.checked = autosaveNubeActivado();
+                chkAutosaveNube.addEventListener('change', function () {
+                    try { localStorage.setItem(AUTOSAVE_NUBE_KEY, this.checked ? '1' : '0'); } catch (e) { /* noop */ }
+                    if (this.checked) {
+                        programarAutosaveNube(); // guarda ya lo que haya pendiente
+                    } else {
+                        cancelarTimersNube();
+                        ponerEstadoNube('off');
+                    }
+                });
+            }
+            document.getElementById('cloud-save-eval').addEventListener('click', guardarEvaluacionEnNube);
+            document.getElementById('cloud-load-eval').addEventListener('click', abrirGestorEvaluacionesNube);
+
             // Rúbricas guardadas en Firebase + AutoNotas
             document.getElementById('open-saved-rubrics-setup').addEventListener('click', () => RF.abrirGestor());
             document.getElementById('open-saved-rubrics-eval').addEventListener('click', () => RF.abrirGestor());
@@ -8043,6 +9139,16 @@
             // Módulo RF: lo configura la página unificada con configurarRF('evaluador')
             updateStatusIndicators();
 
+            // Autoguardado en la nube: cuando la sesión esté lista, si estos
+            // datos ya están vinculados a una evaluación de la nube, se
+            // sincronizan al momento (catch-up) para refrescar la copia remota.
+            ponerEstadoNube(autosaveNubeActivado() ? 'inactivo' : 'off');
+            if (window.AUTH && typeof window.AUTH.alListo === 'function') {
+                AUTH.alListo(function () {
+                    if (nubeAuto.id && students.length > 0 && aspects.length > 0) programarAutosaveNube();
+                });
+            }
+
             // ¿Hay una rúbrica pendiente enviada desde una materia?
             pendingRubric = readPendingRubric();
             if (pendingRubric && document.getElementById('modal-overlay').classList.contains('hidden')) {
@@ -8107,6 +9213,8 @@
     const APP_ID = 'rubricas-evaluacion';
     const NS = 'portal-tecdea/rubricasApp';   // ← nodo de aislamiento (reglas del centro)
     const RUBRICAS_PATH = NS + '/rubricas';
+    const GRUPOS_PATH = NS + '/grupos';                 // por usuario: /grupos/{usuario}/{id}
+    const EVALUACIONES_PATH = NS + '/evaluaciones';     // por usuario: /evaluaciones/{usuario}/{id}
     const PENDING_LOAD_KEY = 'rubricasApp:cargar-pendiente';
     const PENDING_EVAL_KEY = 'evaluador:rubrica-pendiente';
     const SDK = 'https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js';
@@ -8397,6 +9505,199 @@
         });
     }
 
+    /* ============================================================
+     * GRUPOS DE ALUMNADO Y EVALUACIONES (nube, por usuario)
+     * ------------------------------------------------------------
+     * A diferencia de las rúbricas (compartidas por el departamento),
+     * los grupos de alumnado y las evaluaciones con calificaciones son
+     * datos personales: se guardan bajo la clave del usuario con sesión.
+     * ============================================================ */
+    function usuarioRF() {
+        try {
+            return (window.AUTH && typeof window.AUTH.usuario === 'function')
+                ? String(window.AUTH.usuario() || '') : '';
+        } catch (e) { return ''; }
+    }
+
+    function errSinSesion() {
+        return new Error('No hay sesión activa: inicia sesión de nuevo para usar el guardado en la nube.');
+    }
+
+    // Upsert por nombre: si ya existe un grupo con el mismo nombre se
+    // actualiza (mantiene createdAt); si no, se crea uno nuevo.
+    function guardarGrupo(nombre, alumnos) {
+        const u = usuarioRF();
+        if (!u) return Promise.reject(errSinSesion());
+        return arrancar().then(function () {
+            const ruta = db.ref(GRUPOS_PATH + '/' + u);
+            return ruta.once('value').then(function (snap) {
+                const nombreLimpio = String(nombre || '').trim() || 'Grupo sin nombre';
+                let idExistente = null;
+                snap.forEach(function (child) {
+                    const r = child.val() || {};
+                    if (String(r.nombre || '').trim() === nombreLimpio) idExistente = child.key;
+                });
+                const ahora = new Date().toISOString();
+                const registro = {
+                    nombre: nombreLimpio,
+                    alumnos: Array.isArray(alumnos) ? alumnos.slice() : [],
+                    owner: u,
+                    app: APP_ID,
+                    updatedAt: ahora
+                };
+                registro.n = registro.alumnos.length;
+                if (idExistente) {
+                    const prev = snap.child(idExistente).val() || {};
+                    return ruta.child(idExistente).update(Object.assign({ createdAt: prev.createdAt || ahora }, registro))
+                        .then(function () { return idExistente; });
+                }
+                registro.createdAt = ahora;
+                return ruta.push(registro).then(function (ref) { return ref.key; });
+            });
+        });
+    }
+
+    function listarGrupos() {
+        const u = usuarioRF();
+        if (!u) return Promise.reject(errSinSesion());
+        return arrancar().then(function () {
+            return db.ref(GRUPOS_PATH + '/' + u).once('value').then(function (snap) {
+                const lista = [];
+                snap.forEach(function (child) {
+                    const r = child.val() || {};
+                    lista.push({
+                        id: child.key,
+                        nombre: r.nombre || 'Grupo sin nombre',
+                        alumnos: Array.isArray(r.alumnos) ? r.alumnos : [],
+                        updatedAt: r.updatedAt || r.createdAt || ''
+                    });
+                });
+                lista.sort(function (a, b) { return a.nombre.localeCompare(b.nombre, 'es'); });
+                return lista;
+            });
+        });
+    }
+
+    function eliminarGrupo(id) {
+        const u = usuarioRF();
+        if (!u) return Promise.reject(errSinSesion());
+        return arrancar().then(function () {
+            return db.ref(GRUPOS_PATH + '/' + u + '/' + id).remove();
+        });
+    }
+
+    // La evaluación viaja como JSON en un único campo «datos»: las claves
+    // de teacher/students son nombres de alumnado y de criterios (con
+    // puntos), que no son válidas como rutas de Firebase.
+    function guardarEvaluacion(nombre, datos, meta) {
+        const u = usuarioRF();
+        if (!u) return Promise.reject(errSinSesion());
+        return arrancar().then(function () {
+            const ruta = db.ref(EVALUACIONES_PATH + '/' + u);
+            return ruta.once('value').then(function (snap) {
+                const nombreLimpio = String(nombre || '').trim() || 'Evaluación sin nombre';
+                let idExistente = null;
+                snap.forEach(function (child) {
+                    const r = child.val() || {};
+                    if (String(r.nombre || '').trim() === nombreLimpio) idExistente = child.key;
+                });
+                const m = meta || {};
+                const ahora = new Date().toISOString();
+                const registro = {
+                    nombre: nombreLimpio,
+                    evaluationName: m.evaluationName || '',
+                    groupName: m.groupName || '',
+                    nEstudiantes: m.nEstudiantes || 0,
+                    nAspectos: m.nAspectos || 0,
+                    datos: typeof datos === 'string' ? datos : JSON.stringify(datos || {}),
+                    owner: u,
+                    app: APP_ID,
+                    updatedAt: ahora
+                };
+                if (idExistente) {
+                    const prev = snap.child(idExistente).val() || {};
+                    return ruta.child(idExistente).update(Object.assign({ createdAt: prev.createdAt || ahora }, registro))
+                        .then(function () { return idExistente; });
+                }
+                registro.createdAt = ahora;
+                return ruta.push(registro).then(function (ref) { return ref.key; });
+            });
+        });
+    }
+
+    // Escritura directa por id (autoguardado del evaluador): actualiza la
+    // entrada SIN buscar por nombre ni pedir confirmación. Si el id ya no
+    // existe (p. ej. se borró desde otro dispositivo), se crea una entrada
+    // nueva y se devuelve su id para que el autoguardado la adopte.
+    function guardarEvaluacionPorId(id, nombre, datos, meta) {
+        const u = usuarioRF();
+        if (!u) return Promise.reject(errSinSesion());
+        return arrancar().then(function () {
+            const base = db.ref(EVALUACIONES_PATH + '/' + u);
+            const m = meta || {};
+            const ahora = new Date().toISOString();
+            const registro = {
+                nombre: String(nombre || '').trim() || 'Evaluación sin nombre',
+                evaluationName: m.evaluationName || '',
+                groupName: m.groupName || '',
+                nEstudiantes: m.nEstudiantes || 0,
+                nAspectos: m.nAspectos || 0,
+                datos: typeof datos === 'string' ? datos : JSON.stringify(datos || {}),
+                owner: u,
+                app: APP_ID,
+                updatedAt: ahora
+            };
+            if (id) {
+                return base.child(id).once('value').then(function (snap) {
+                    if (snap.exists()) {
+                        const prev = snap.val() || {};
+                        return base.child(id).update(Object.assign({ createdAt: prev.createdAt || ahora }, registro))
+                            .then(function () { return { id: id, creado: false }; });
+                    }
+                    registro.createdAt = ahora;
+                    return base.push(registro).then(function (ref) { return { id: ref.key, creado: true }; });
+                });
+            }
+            registro.createdAt = ahora;
+            return base.push(registro).then(function (ref) { return { id: ref.key, creado: true }; });
+        });
+    }
+
+    function listarEvaluaciones() {
+        const u = usuarioRF();
+        if (!u) return Promise.reject(errSinSesion());
+        return arrancar().then(function () {
+            return db.ref(EVALUACIONES_PATH + '/' + u).once('value').then(function (snap) {
+                const lista = [];
+                snap.forEach(function (child) {
+                    const r = child.val() || {};
+                    lista.push({
+                        id: child.key,
+                        nombre: r.nombre || 'Evaluación sin nombre',
+                        evaluationName: r.evaluationName || '',
+                        groupName: r.groupName || '',
+                        nEstudiantes: r.nEstudiantes || 0,
+                        nAspectos: r.nAspectos || 0,
+                        datos: r.datos || '',
+                        updatedAt: r.updatedAt || r.createdAt || ''
+                    });
+                });
+                lista.sort(function (a, b) {
+                    return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+                });
+                return lista;
+            });
+        });
+    }
+
+    function eliminarEvaluacion(id) {
+        const u = usuarioRF();
+        if (!u) return Promise.reject(errSinSesion());
+        return arrancar().then(function () {
+            return db.ref(EVALUACIONES_PATH + '/' + u + '/' + id).remove();
+        });
+    }
+
     /* ===== Enviar una rúbrica guardada al módulo de evaluación ===== */
     function enviarAEvaluacion(rubrica) {
         const payload = {
@@ -8483,7 +9784,20 @@
         procesarCargaPendiente: procesarCargaPendiente,
         abrirGestor: function () { abrirGestor(); },
         abrirDialogoGuardar: function (payload, nombreSugerido) { abrirDialogoGuardar(payload, nombreSugerido); },
-        _version: '1.0'
+        /* Grupos de alumnado y evaluaciones (por usuario) */
+        guardarGrupo: guardarGrupo,
+        listarGrupos: listarGrupos,
+        eliminarGrupo: eliminarGrupo,
+        abrirDialogoGuardarGrupo: abrirDialogoGuardarGrupo,
+        abrirGestorGrupos: abrirGestorGrupos,
+        guardarEvaluacion: guardarEvaluacion,
+        guardarEvaluacionPorId: guardarEvaluacionPorId,
+        listarEvaluaciones: listarEvaluaciones,
+        eliminarEvaluacion: eliminarEvaluacion,
+        abrirDialogoGuardarEvaluacion: abrirDialogoGuardarEvaluacion,
+        abrirGestorEvaluaciones: abrirGestorEvaluaciones,
+        toast: toast,
+        _version: '1.2'
     };
 
     /* ============================================================
@@ -8582,7 +9896,9 @@
         buscar: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>',
         check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
         alerta: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
-        db: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>'
+        db: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+        grupos: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>',
+        evaluacion: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>'
     };
 
     /* ===== Gestión de pila de modales + bloqueo de scroll ===== */
@@ -8635,6 +9951,7 @@
     }
     function pintarEstadoEnModales() {
         document.querySelectorAll('.rf-chip-estado').forEach(function (el) { el.innerHTML = chipEstadoHTML(); });
+        pintarZonasNube(); // gestores de grupos/evaluaciones abiertos
     }
 
     /* ============================================================
@@ -8931,6 +10248,402 @@
         overlay.dataset.esc = 'no';
         abrirModal(overlay);
         bC.focus();
+    }
+
+    /* ============================================================
+     * INTERFAZ: GRUPOS DE ALUMNADO Y EVALUACIONES
+     * ============================================================ */
+    function zonaEstadoNubeHTML() {
+        if (estado === 'conectando') {
+            return '<div class="rf-loading"><span class="rf-spin"></span> Conectando con Firebase…</div>';
+        }
+        return '<div class="rf-aviso rf-aviso-error">' + ICO.alerta +
+            '<div><b>No hay conexión con la base de datos.</b><br>' + esc(errorMsg || 'Comprueba tu conexión a internet y vuelve a intentarlo.') +
+            '<br><br><button class="rf-btn rf-btn-sec" data-rn="reintentar">Reintentar</button></div></div>';
+    }
+
+    function vincularReintentar(zona) {
+        const btn = zona.querySelector('[data-rn="reintentar"]');
+        if (btn) btn.addEventListener('click', function () { window.location.reload(); });
+    }
+
+    // Diálogo de borrado genérico para grupos y evaluaciones
+    function abrirDialogoBorrarNube(opts) {
+        const overlay = document.createElement('div');
+        overlay.className = 'rf-overlay';
+        overlay.innerHTML =
+            '<div class="rf-modal rf-mini" role="dialog" aria-modal="true">' +
+            '  <div class="rf-modal-head"><span class="rf-micon" style="background:#fef2f2;color:#dc2626">' + ICO.borrar + '</span>' +
+            '    <div><h3>' + esc(opts.titulo || '¿Borrar?') + '</h3><div class="rf-sub">' + esc(opts.nombre || '') + '</div></div></div>' +
+            '  <div class="rf-modal-body">' +
+            '    <div class="rf-aviso rf-aviso-error">' + ICO.alerta + '<span>' +
+            (opts.detalle ? esc(opts.detalle) + '<br>' : '') + 'Esta acción no se puede deshacer.</span></div>' +
+            '  </div>' +
+            '  <div class="rf-modal-actions">' +
+            '    <button class="rf-btn rf-btn-sec" data-rn="c">Cancelar</button>' +
+            '    <button class="rf-btn" style="background:#dc2626" data-rn="g">' + ICO.borrar + ' Sí, borrar</button>' +
+            '  </div>' +
+            '</div>';
+        const bC = overlay.querySelector('[data-rn="c"]'), bG = overlay.querySelector('[data-rn="g"]');
+        bC.addEventListener('click', function () { cerrarModal(overlay); });
+        overlayClicable(overlay);
+        bG.addEventListener('click', function () {
+            bG.disabled = true;
+            opts.alBorrar().then(function () {
+                cerrarModal(overlay);
+                toast('Eliminado correctamente');
+                if (typeof opts.alExito === 'function') opts.alExito();
+            }).catch(function (err) {
+                bG.disabled = false;
+                toast('No se pudo eliminar: ' + traducirError(err), 'err');
+            });
+        });
+        overlay.dataset.esc = 'no';
+        abrirModal(overlay);
+        bC.focus();
+    }
+
+    /* Zonas de grupos/evaluaciones abiertas: se repintan cuando cambia el
+     * estado de conexión (si se abren antes de que Firebase conecte, no
+     * quedan parpadeando en «Conectando…» para siempre) */
+    let zonasNubeAbiertas = []; // { overlay, tipo, repintar }
+
+    function pintarZonasNube() {
+        zonasNubeAbiertas = zonasNubeAbiertas.filter(function (z) {
+            return z.overlay && z.overlay.parentNode;
+        });
+        zonasNubeAbiertas.forEach(function (z) {
+            try { z.repintar(); } catch (e) { /* silencioso */ }
+        });
+    }
+
+    /* ===== Gestor de grupos ===== */
+    function abrirGestorGrupos(opts) {
+        inyectarCSS();
+        const yaAbierto = zonasNubeAbiertas.find(function (z) {
+            return z.tipo === 'grupos' && z.overlay && z.overlay.parentNode;
+        });
+        if (yaAbierto) { yaAbierto.repintar(); return; }
+        const onCargar = opts && typeof opts.onCargar === 'function' ? opts.onCargar : null;
+        const overlay = document.createElement('div');
+        overlay.className = 'rf-overlay';
+        overlay.innerHTML =
+            '<div class="rf-modal" role="dialog" aria-modal="true" aria-label="Grupos de alumnado guardados">' +
+            '  <div class="rf-modal-head">' +
+            '    <span class="rf-micon">' + ICO.grupos + '</span>' +
+            '    <div><h3>Grupos de alumnado</h3><div class="rf-sub">Guardados en Firebase · asociados a tu usuario</div></div>' +
+            '    <span class="rf-chip-estado" style="margin-left:8px">' + chipEstadoHTML() + '</span>' +
+            '    <button class="rf-close" aria-label="Cerrar">&times;</button>' +
+            '  </div>' +
+            '  <div class="rf-modal-body"><div class="rf-zona-grupos"></div></div>' +
+            '  <div class="rf-modal-foot">' + ICO.db + ' Nodo aislado <b>&nbsp;portal-tecdea/rubricasApp/grupos</b> · los grupos importados desde archivo se guardan automáticamente</div>' +
+            '</div>';
+        overlay.querySelector('.rf-close').addEventListener('click', function () { cerrarModal(overlay); });
+        overlayClicable(overlay);
+        zonasNubeAbiertas.push({
+            overlay: overlay,
+            tipo: 'grupos',
+            repintar: function () { pintarZonaGrupos(overlay, onCargar, true); }
+        });
+        abrirModal(overlay);
+        pintarZonaGrupos(overlay, onCargar);
+    }
+
+    function pintarZonaGrupos(overlay, onCargar, esRepintado) {
+        const zona = overlay.querySelector('.rf-zona-grupos');
+        if (!zona) return;
+        // Repintado por cambio de estado: si la lista ya está cargada, no
+        // se relee de Firebase (la sincronización de rúbricas en tiempo
+        // real dispara estos repintados con frecuencia)
+        if (esRepintado && estado === 'conectado' && zona.dataset.nubeLista === '1') return;
+        if (estado !== 'conectado') {
+            zona.innerHTML = zonaEstadoNubeHTML();
+            vincularReintentar(zona);
+            return;
+        }
+        zona.innerHTML = '<div class="rf-loading"><span class="rf-spin"></span> Cargando grupos…</div>';
+        listarGrupos().then(function (lista) {
+            if (!overlay.parentNode) return; // el modal se cerró mientras cargaba
+            if (!lista.length) {
+                zona.innerHTML = '<div class="rf-empty">' + ICO.grupos +
+                    '<p>Todavía no hay grupos guardados.<br>Importa alumnado desde un archivo o usa «Guardar grupo actual».</p></div>';
+                zona.dataset.nubeLista = '1';
+                return;
+            }
+            zona.innerHTML = lista.map(function (g) {
+                return '<div class="rf-item" data-id="' + esc(g.id) + '">' +
+                    '  <div class="rf-item-top"><div style="flex:1;min-width:0">' +
+                    '    <div class="rf-item-nombre">' + esc(g.nombre) + '</div>' +
+                    '    <div class="rf-item-meta"><span><b>' + g.alumnos.length + ' estudiante' + (g.alumnos.length === 1 ? '' : 's') + '</b></span>' +
+                    '      <span>guardado ' + esc(fechaCorta(g.updatedAt)) + '</span></div>' +
+                    '  </div></div>' +
+                    '  <div class="rf-item-actions">' +
+                    '    <button class="rf-act rf-act-pri" data-rn="cargar">' + ICO.usar + ' Cargar grupo</button>' +
+                    '    <button class="rf-act rf-act-del" data-rn="borrar">' + ICO.borrar + ' Borrar</button>' +
+                    '  </div>' +
+                    '</div>';
+            }).join('');
+            zona.dataset.nubeLista = '1';
+            lista.forEach(function (g) {
+                const item = zona.querySelector('.rf-item[data-id="' + g.id + '"]');
+                if (!item) return;
+                item.querySelector('[data-rn="cargar"]').addEventListener('click', function () {
+                    cerrarTodo();
+                    if (onCargar) onCargar(g);
+                });
+                item.querySelector('[data-rn="borrar"]').addEventListener('click', function () {
+                    abrirDialogoBorrarNube({
+                        titulo: '¿Borrar este grupo?',
+                        nombre: g.nombre,
+                        detalle: g.alumnos.length + ' estudiantes.',
+                        alBorrar: function () { return eliminarGrupo(g.id); },
+                        alExito: function () { pintarZonaGrupos(overlay, onCargar); }
+                    });
+                });
+            });
+        }).catch(function (err) {
+            if (!overlay.parentNode) return;
+            zona.innerHTML = '<div class="rf-aviso rf-aviso-error">' + ICO.alerta +
+                '<div><b>No se pudieron cargar los grupos.</b><br>' + esc(traducirError(err)) + '</div></div>';
+        });
+    }
+
+    /* ===== Diálogo: guardar grupo ===== */
+    function abrirDialogoGuardarGrupo(nombreSugerido, alumnos) {
+        inyectarCSS();
+        const n = Array.isArray(alumnos) ? alumnos.length : 0;
+        const overlay = document.createElement('div');
+        overlay.className = 'rf-overlay';
+        overlay.innerHTML =
+            '<div class="rf-modal rf-mini" role="dialog" aria-modal="true" aria-label="Guardar grupo de alumnado">' +
+            '  <div class="rf-modal-head">' +
+            '    <span class="rf-micon">' + ICO.grupos + '</span>' +
+            '    <div><h3>Guardar grupo de alumnado</h3><div class="rf-sub">Quedará disponible en todos tus dispositivos</div></div>' +
+            '  </div>' +
+            '  <div class="rf-modal-body">' +
+            '    <div class="rf-field"><label for="rg-nombre">Nombre del grupo</label>' +
+            '      <input id="rg-nombre" type="text" maxlength="60" value="' + esc(nombreSugerido || '') + '" placeholder="Ej: 1ºA"></div>' +
+            '    <div class="rf-resumen"><span class="rf-badge">' + n + ' estudiantes</span></div>' +
+            '    <div class="rf-aviso">' + ICO.db + '<span>Si ya tienes un grupo con el mismo nombre, se te pedirá confirmación para reemplazarlo.</span></div>' +
+            '  </div>' +
+            '  <div class="rf-modal-actions">' +
+            '    <button class="rf-btn rf-btn-sec" data-rn="cancelar">Cancelar</button>' +
+            '    <button class="rf-btn" data-rn="guardar">' + ICO.guardar + ' Guardar grupo</button>' +
+            '  </div>' +
+            '</div>';
+        const input = overlay.querySelector('#rg-nombre');
+        const bCancel = overlay.querySelector('[data-rn="cancelar"]');
+        const bSave = overlay.querySelector('[data-rn="guardar"]');
+        const textoGuardar = ICO.guardar + ' Guardar grupo';
+        bCancel.addEventListener('click', function () { cerrarModal(overlay); });
+        overlayClicable(overlay);
+
+        function hacerGuardar() {
+            const nombre = input.value.trim();
+            if (!nombre) { input.focus(); toast('Escribe un nombre para el grupo', 'err'); return; }
+            bSave.disabled = true;
+            bSave.innerHTML = '<span class="rf-spin" style="border-color:rgba(255,255,255,.35);border-top-color:#fff"></span> Guardando…';
+            esConectado().then(function (ok) {
+                if (!ok) throw new Error('Sin conexión con la base de datos');
+                return listarGrupos().then(function (lista) {
+                    const existe = lista.some(function (g) { return g.nombre === nombre; });
+                    if (existe && !confirm('Ya tienes un grupo guardado llamado «' + nombre + '».\n\n¿Reemplazarlo con la lista actual de estudiantes?')) {
+                        return null;
+                    }
+                    return guardarGrupo(nombre, alumnos).then(function () { return true; });
+                });
+            }).then(function (res) {
+                if (res === null) { // cancelado: permitir cambiar el nombre
+                    bSave.disabled = false; bSave.innerHTML = textoGuardar;
+                    return;
+                }
+                cerrarModal(overlay);
+                toast('Grupo «' + nombre + '» guardado');
+            }).catch(function (err) {
+                bSave.disabled = false; bSave.innerHTML = textoGuardar;
+                toast('No se pudo guardar: ' + traducirError(err), 'err');
+            });
+        }
+        bSave.addEventListener('click', hacerGuardar);
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') hacerGuardar(); });
+        abrirModal(overlay);
+        input.focus(); input.select();
+    }
+
+    /* ===== Gestor de evaluaciones ===== */
+    function abrirGestorEvaluaciones(opts) {
+        inyectarCSS();
+        const yaAbierto = zonasNubeAbiertas.find(function (z) {
+            return z.tipo === 'evaluaciones' && z.overlay && z.overlay.parentNode;
+        });
+        if (yaAbierto) { yaAbierto.repintar(); return; }
+        const onCargar = opts && typeof opts.onCargar === 'function' ? opts.onCargar : null;
+        const alBorrar = opts && typeof opts.alBorrar === 'function' ? opts.alBorrar : null;
+        const overlay = document.createElement('div');
+        overlay.className = 'rf-overlay';
+        overlay.innerHTML =
+            '<div class="rf-modal" role="dialog" aria-modal="true" aria-label="Evaluaciones guardadas en la nube">' +
+            '  <div class="rf-modal-head">' +
+            '    <span class="rf-micon">' + ICO.evaluacion + '</span>' +
+            '    <div><h3>Evaluaciones guardadas</h3><div class="rf-sub">Con alumnado, rúbrica y calificaciones · continúalas en cualquier dispositivo</div></div>' +
+            '    <span class="rf-chip-estado" style="margin-left:8px">' + chipEstadoHTML() + '</span>' +
+            '    <button class="rf-close" aria-label="Cerrar">&times;</button>' +
+            '  </div>' +
+            '  <div class="rf-modal-body"><div class="rf-zona-evals"></div></div>' +
+            '  <div class="rf-modal-foot">' + ICO.db + ' Nodo aislado <b>&nbsp;portal-tecdea/rubricasApp/evaluaciones</b> · asociadas a tu usuario</div>' +
+            '</div>';
+        overlay.querySelector('.rf-close').addEventListener('click', function () { cerrarModal(overlay); });
+        overlayClicable(overlay);
+        zonasNubeAbiertas.push({
+            overlay: overlay,
+            tipo: 'evaluaciones',
+            repintar: function () { pintarZonaEvaluaciones(overlay, onCargar, alBorrar, true); }
+        });
+        abrirModal(overlay);
+        pintarZonaEvaluaciones(overlay, onCargar, alBorrar);
+    }
+
+    function pintarZonaEvaluaciones(overlay, onCargar, alBorrar, esRepintado) {
+        const zona = overlay.querySelector('.rf-zona-evals');
+        if (!zona) return;
+        // Igual que los grupos: el repintado por cambio de estado no relee
+        // si la lista ya está cargada
+        if (esRepintado && estado === 'conectado' && zona.dataset.nubeLista === '1') return;
+        if (estado !== 'conectado') {
+            zona.innerHTML = zonaEstadoNubeHTML();
+            vincularReintentar(zona);
+            return;
+        }
+        zona.innerHTML = '<div class="rf-loading"><span class="rf-spin"></span> Cargando evaluaciones…</div>';
+        listarEvaluaciones().then(function (lista) {
+            if (!overlay.parentNode) return; // el modal se cerró mientras cargaba
+            if (!lista.length) {
+                zona.innerHTML = '<div class="rf-empty">' + ICO.evaluacion +
+                    '<p>Todavía no hay evaluaciones guardadas.<br>Usa «Guardar en la nube» para conservar las calificaciones y continuarlas en otra sesión.</p></div>';
+                zona.dataset.nubeLista = '1';
+                return;
+            }
+            zona.innerHTML = lista.map(function (e) {
+                return '<div class="rf-item" data-id="' + esc(e.id) + '">' +
+                    '  <div class="rf-item-top"><div style="flex:1;min-width:0">' +
+                    '    <div class="rf-item-nombre">' + esc(e.nombre) + '</div>' +
+                    '    <div class="rf-item-meta">' +
+                    (e.groupName ? '<span><b>' + esc(e.groupName) + '</b></span>' : '') +
+                    '      <span>' + e.nEstudiantes + ' estudiantes</span>' +
+                    '      <span>' + e.nAspectos + ' criterios</span>' +
+                    '      <span>' + esc(fechaCorta(e.updatedAt)) + '</span>' +
+                    '    </div>' +
+                    '  </div></div>' +
+                    '  <div class="rf-item-actions">' +
+                    '    <button class="rf-act rf-act-pri" data-rn="cargar">' + ICO.evaluacion + ' Continuar evaluación</button>' +
+                    '    <button class="rf-act rf-act-del" data-rn="borrar">' + ICO.borrar + ' Borrar</button>' +
+                    '  </div>' +
+                    '</div>';
+            }).join('');
+            zona.dataset.nubeLista = '1';
+            lista.forEach(function (e) {
+                const item = zona.querySelector('.rf-item[data-id="' + e.id + '"]');
+                if (!item) return;
+                item.querySelector('[data-rn="cargar"]').addEventListener('click', function () {
+                    cerrarTodo();
+                    if (onCargar) onCargar(e);
+                });
+                item.querySelector('[data-rn="borrar"]').addEventListener('click', function () {
+                    abrirDialogoBorrarNube({
+                        titulo: '¿Borrar esta evaluación?',
+                        nombre: e.nombre,
+                        detalle: 'Se perderán las calificaciones guardadas en la nube (las copias locales y los export no se ven afectados).',
+                        alBorrar: function () { return eliminarEvaluacion(e.id); },
+                        alExito: function () {
+                            if (alBorrar) { try { alBorrar(e.id); } catch (err) { /* silencioso */ } }
+                            pintarZonaEvaluaciones(overlay, onCargar, alBorrar);
+                        }
+                    });
+                });
+            });
+        }).catch(function (err) {
+            if (!overlay.parentNode) return;
+            zona.innerHTML = '<div class="rf-aviso rf-aviso-error">' + ICO.alerta +
+                '<div><b>No se pudieron cargar las evaluaciones.</b><br>' + esc(traducirError(err)) + '</div></div>';
+        });
+    }
+
+    /* ===== Diálogo: guardar evaluación ===== */
+    function abrirDialogoGuardarEvaluacion(opts) {
+        inyectarCSS();
+        const o = opts || {};
+        const obtenerDatos = typeof o.obtenerDatos === 'function' ? o.obtenerDatos : null;
+        if (!obtenerDatos) return;
+        const resumen = o.resumen || {};
+        const overlay = document.createElement('div');
+        overlay.className = 'rf-overlay';
+        overlay.innerHTML =
+            '<div class="rf-modal rf-mini" role="dialog" aria-modal="true" aria-label="Guardar evaluación en la nube">' +
+            '  <div class="rf-modal-head">' +
+            '    <span class="rf-micon">' + ICO.evaluacion + '</span>' +
+            '    <div><h3>Guardar evaluación en la nube</h3><div class="rf-sub">Alumnado, rúbrica y calificaciones</div></div>' +
+            '  </div>' +
+            '  <div class="rf-modal-body">' +
+            '    <div class="rf-field"><label for="re-nombre">Nombre de la evaluación</label>' +
+            '      <input id="re-nombre" type="text" maxlength="90" value="' + esc(o.nombreSugerido || '') + '" placeholder="Ej: Exposición · 1ºA"></div>' +
+            '    <div class="rf-resumen">' +
+            (resumen.grupo ? '<span class="rf-badge">' + esc(resumen.grupo) + '</span>' : '') +
+            '      <span class="rf-badge">' + (resumen.nEstudiantes || 0) + ' estudiantes</span>' +
+            '      <span class="rf-badge">' + (resumen.nAspectos || 0) + ' criterios</span>' +
+            '    </div>' +
+            '    <div class="rf-aviso">' + ICO.db + '<span>Se guardan las calificaciones actuales del profesor y de la coevaluación para continuar en otra sesión o dispositivo. Si ya existe una evaluación con el mismo nombre, se te pedirá confirmación para reemplazarla.</span></div>' +
+            '  </div>' +
+            '  <div class="rf-modal-actions">' +
+            '    <button class="rf-btn rf-btn-sec" data-rn="cancelar">Cancelar</button>' +
+            '    <button class="rf-btn" data-rn="guardar">' + ICO.guardar + ' Guardar evaluación</button>' +
+            '  </div>' +
+            '</div>';
+        const input = overlay.querySelector('#re-nombre');
+        const bCancel = overlay.querySelector('[data-rn="cancelar"]');
+        const bSave = overlay.querySelector('[data-rn="guardar"]');
+        const textoGuardar = ICO.guardar + ' Guardar evaluación';
+        bCancel.addEventListener('click', function () { cerrarModal(overlay); });
+        overlayClicable(overlay);
+
+        function hacerGuardar() {
+            const nombre = input.value.trim();
+            if (!nombre) { input.focus(); toast('Escribe un nombre para la evaluación', 'err'); return; }
+            bSave.disabled = true;
+            bSave.innerHTML = '<span class="rf-spin" style="border-color:rgba(255,255,255,.35);border-top-color:#fff"></span> Guardando…';
+            esConectado().then(function (ok) {
+                if (!ok) throw new Error('Sin conexión con la base de datos');
+                return listarEvaluaciones().then(function (lista) {
+                    const existe = lista.some(function (e) { return e.nombre === nombre; });
+                    if (existe && !confirm('Ya existe una evaluación guardada llamada «' + nombre + '».\n\n¿Reemplazarla con los datos actuales?')) {
+                        return null;
+                    }
+                    const datos = obtenerDatos();
+                    return guardarEvaluacion(nombre, datos, {
+                        evaluationName: resumen.evaluationName || '',
+                        groupName: resumen.grupo || '',
+                        nEstudiantes: resumen.nEstudiantes || 0,
+                        nAspectos: resumen.nAspectos || 0
+                    }).then(function (id) { return { guardado: true, id: id }; });
+                });
+            }).then(function (res) {
+                if (res === null) { // cancelado: permitir cambiar el nombre
+                    bSave.disabled = false; bSave.innerHTML = textoGuardar;
+                    return;
+                }
+                cerrarModal(overlay);
+                toast('Evaluación «' + nombre + '» guardada');
+                if (typeof o.alGuardar === 'function') {
+                    try { o.alGuardar(res.id, nombre); } catch (e) { /* silencioso */ }
+                }
+            }).catch(function (err) {
+                bSave.disabled = false; bSave.innerHTML = textoGuardar;
+                toast('No se pudo guardar: ' + traducirError(err), 'err');
+            });
+        }
+        bSave.addEventListener('click', hacerGuardar);
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') hacerGuardar(); });
+        abrirModal(overlay);
+        input.focus(); input.select();
     }
 
     /* ===== Auto-inyección de estilos al cargar =====
@@ -9423,216 +11136,9 @@
     window.RC = { abrir: abrir };
 })();
     </script>
-    <!-- ============================================================
-     MÓDULO DE AUTENTICACIÓN (AUTH)
-     Login por usuario + contraseña · primer usuario automático ·
-     gestión de usuarios (añadir, cambiar contraseña, eliminar)
-     ============================================================ -->
-<style id="au-css">
-/* ===== MÓDULO DE AUTENTICACIÓN: login, chip de usuario y gestión de usuarios ===== */
-/* Prefijo au- para no colisionar con el resto de la app */
-
-/* ---------- Pantalla de login (cubre toda la app hasta haber sesión válida) ---------- */
-#au-login{position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;padding:20px;
-  background:linear-gradient(140deg,rgba(238,241,251,.94) 0%,rgba(228,233,247,.96) 45%,rgba(240,229,250,.95) 100%);
-  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);animation:auIn .25s ease-out}
-#au-login[hidden]{display:none}
-@keyframes auIn{from{opacity:0}to{opacity:1}}
-@keyframes auUp{from{opacity:0;transform:translateY(14px) scale(.985)}to{opacity:1;transform:none}}
-.au-card{background:rgba(255,255,255,.8);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
-  border:1px solid rgba(255,255,255,.8);border-radius:24px;
-  box-shadow:0 24px 64px rgba(79,70,229,.16),0 4px 18px rgba(15,23,42,.07);
-  width:100%;max-width:412px;padding:32px 28px 24px;animation:auUp .32s cubic-bezier(.2,.8,.3,1);text-align:center}
-.au-tile{width:56px;height:56px;border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;
-  background:linear-gradient(135deg,#4f46e5,#7c3aed);box-shadow:0 10px 24px rgba(79,70,229,.35);color:#fff}
-.au-tile svg{width:30px;height:30px}
-.au-title{font-family:'Plus Jakarta Sans','Inter',system-ui,sans-serif;font-weight:800;font-size:1.5rem;
-  letter-spacing:-.02em;line-height:1.2;margin:0;
-  background:linear-gradient(135deg,#4f46e5,#7c3aed);-webkit-background-clip:text;background-clip:text;color:transparent}
-.au-sub{color:#64748b;font-size:.86rem;margin:6px 0 20px;line-height:1.45}
-.au-banner{background:#eef2ff;border:1px solid #c7d2fe;color:#3730a3;font-size:.82rem;line-height:1.5;
-  padding:10px 13px;border-radius:12px;margin:0 0 16px;text-align:left}
-.au-campo{text-align:left;margin-bottom:13px}
-.au-campo label{display:block;font-size:.8rem;font-weight:600;color:#334155;margin-bottom:5px}
-.au-input-wrap{position:relative}
-.au-input{width:100%;box-sizing:border-box;padding:10px 42px 10px 13px;border:1px solid #cbd5e1;border-radius:12px;
-  background:#fff;font-size:15px;color:#0f172a;font-family:inherit;transition:border-color .15s,box-shadow .15s}
-.au-input:focus{outline:none;border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.16)}
-.au-input:disabled{background:#f1f5f9;color:#94a3b8}
-.au-ojo{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:none;border:0;padding:7px;
-  color:#94a3b8;cursor:pointer;border-radius:8px;display:flex;line-height:0}
-.au-ojo:hover{color:#4f46e5}
-.au-error{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:.83rem;line-height:1.45;
-  padding:9px 12px;border-radius:10px;margin:2px 0 12px;text-align:left}
-.au-error.au-visible{display:block}
-.au-btn{width:100%;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;cursor:pointer;
-  padding:11px 18px;border-radius:13px;font:600 15px 'Inter',system-ui,sans-serif;color:#fff;
-  background:linear-gradient(135deg,#4f46e5,#6d28d9);
-  box-shadow:0 8px 20px rgba(79,70,229,.32);transition:transform .15s,box-shadow .15s,filter .15s}
-.au-btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.06);box-shadow:0 12px 26px rgba(79,70,229,.4)}
-.au-btn:active:not(:disabled){transform:translateY(0)}
-.au-btn:disabled{opacity:.65;cursor:default}
-.au-btn svg{width:17px;height:17px}
-.au-error-conexion{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;font-size:.83rem;
-  padding:10px 12px;border-radius:10px;margin:10px 0 2px;text-align:left;line-height:1.45}
-.au-error-conexion.au-visible{display:block}
-
-/* ---------- Chip de usuario flotante (visible con sesión iniciada) ---------- */
-#au-fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:99980}
-#au-fab[hidden]{display:none}
-.au-fab-wrap{position:relative}
-.au-chip{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.88);
-  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
-  border:1px solid rgba(203,213,225,.9);border-radius:999px;padding:5px 12px 5px 5px;cursor:pointer;
-  box-shadow:0 8px 24px rgba(15,23,42,.14);transition:transform .15s,box-shadow .15s;
-  font:600 13.5px 'Inter',system-ui,sans-serif;color:#0f172a}
-.au-chip:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(79,70,229,.24)}
-.au-chip:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(79,70,229,.35)}
-.au-ava{width:30px;height:30px;border-radius:999px;display:flex;align-items:center;justify-content:center;flex:none;
-  color:#fff;font:700 13px/1 'Inter',system-ui,sans-serif;background:linear-gradient(135deg,#4f46e5,#7c3aed)}
-.au-chip .au-chev{width:14px;height:14px;color:#94a3b8;transition:transform .18s}
-.au-chip[aria-expanded="true"] .au-chev{transform:rotate(180deg)}
-.au-menu{position:absolute;right:0;bottom:calc(100% + 10px);min-width:236px;background:#fff;border:1px solid #e2e8f0;
-  border-radius:16px;box-shadow:0 18px 48px rgba(15,23,42,.22);padding:6px;display:none;animation:auUp .18s ease-out}
-.au-menu.au-abierta{display:block}
-.au-menu-cab{padding:10px 12px 9px;border-bottom:1px solid #eef2f7;margin-bottom:5px}
-.au-menu-cab small{display:block;font-size:.7rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#94a3b8}
-.au-menu-cab div{font:700 14px 'Inter',system-ui,sans-serif;color:#0f172a;margin-top:2px;word-break:break-all}
-.au-menu-item{display:flex;align-items:center;gap:10px;width:100%;box-sizing:border-box;text-align:left;padding:10px 12px;
-  border:0;background:none;border-radius:10px;font:600 13.5px 'Inter',system-ui,sans-serif;color:#334155;cursor:pointer}
-.au-menu-item:hover{background:#eef2ff;color:#4f46e5}
-.au-menu-item:focus-visible{outline:2px solid #4f46e5;outline-offset:-2px}
-.au-menu-item svg{width:16px;height:16px;flex:none}
-.au-menu-item.au-peligro:hover{background:#fef2f2;color:#b91c1c}
-
-/* ---------- Modal de gestión de usuarios ---------- */
-#au-gestion{position:fixed;inset:0;z-index:99995;background:rgba(15,23,42,.58);
-  -webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;
-  padding:20px;animation:auIn .18s ease-out}
-#au-gestion[hidden]{display:none}
-.au-modal{background:#fff;border-radius:20px;box-shadow:0 24px 64px rgba(15,23,42,.3);width:100%;max-width:560px;
-  max-height:min(88dvh,760px);display:flex;flex-direction:column;animation:auUp .22s cubic-bezier(.2,.8,.3,1);overflow:hidden}
-.au-modal-cab{display:flex;align-items:center;gap:12px;padding:18px 20px 14px;border-bottom:1px solid #eef2f7;flex-shrink:0}
-.au-modal-cab .au-micono{width:38px;height:38px;border-radius:12px;background:#eef2ff;color:#4f46e5;
-  display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.au-modal-cab .au-micono svg{width:19px;height:19px}
-.au-modal-cab h3{font:700 17px/1.25 'Inter',system-ui,sans-serif;color:#0f172a;margin:0}
-.au-modal-cab p{font:400 12.5px/1.4 'Inter',system-ui,sans-serif;color:#64748b;margin:3px 0 0}
-.au-modal-cab .au-cerrar{margin-left:auto;background:none;border:0;padding:7px;border-radius:9px;color:#94a3b8;cursor:pointer;display:flex}
-.au-modal-cab .au-cerrar:hover{background:#f1f5f9;color:#0f172a}
-.au-modal-cab .au-cerrar svg{width:17px;height:17px}
-.au-modal-cuerpo{padding:18px 20px 20px;overflow-y:auto}
-.au-seccion{font:700 12px 'Inter',system-ui,sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#94a3b8;margin:0 0 12px}
-.au-form-alta{background:#f8fafc;border:1px solid #eef2f7;border-radius:14px;padding:14px;margin-bottom:22px}
-.au-form-alta .au-grid{display:grid;grid-template-columns:1fr;gap:10px}
-@media(min-width:480px){.au-form-alta .au-grid{grid-template-columns:1fr 1fr}}
-.au-form-alta .au-grid .au-entero{grid-column:1/-1}
-.au-form-alta .au-campo{margin-bottom:0}
-.au-form-alta .au-input{padding:9px 12px;font-size:14px}
-.au-form-alta .au-acciones{margin-top:12px;display:flex;justify-content:flex-end}
-.au-form-alta .au-btn{width:auto;padding:9px 16px;font-size:13.5px}
-.au-lista{display:flex;flex-direction:column;gap:9px}
-.au-fila{border:1px solid #eef2f7;border-radius:14px;padding:11px 13px;background:#fff;transition:border-color .15s,box-shadow .15s}
-.au-fila:hover{border-color:#c7d2fe;box-shadow:0 3px 12px rgba(79,70,229,.08)}
-.au-fila-cab{display:flex;align-items:center;gap:11px}
-.au-fila-info{flex:1;min-width:0}
-.au-fila-info b{display:block;font:700 14.5px 'Inter',system-ui,sans-serif;color:#0f172a;word-break:break-all}
-.au-fila-info small{display:block;color:#94a3b8;font-size:11.5px;margin-top:2px}
-.au-badge-tu{display:inline-block;background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;font:700 10.5px 'Inter',sans-serif;
-  padding:2px 8px;border-radius:999px;margin-left:7px;vertical-align:1px}
-.au-fila-acciones{display:flex;gap:6px;flex:none}
-.au-mini{display:inline-flex;align-items:center;gap:6px;border:1px solid #e2e8f0;background:#fff;color:#475569;
-  border-radius:9px;padding:6px 10px;font:600 12.5px 'Inter',system-ui,sans-serif;cursor:pointer;transition:all .15s;white-space:nowrap}
-.au-mini:hover{border-color:#4f46e5;color:#4f46e5;background:#eef2ff}
-.au-mini svg{width:13px;height:13px;flex:none}
-.au-mini.au-peligro:hover{border-color:#dc2626;color:#b91c1c;background:#fef2f2}
-.au-mini:disabled{opacity:.45;cursor:not-allowed}
-.au-confirmar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.au-confirmar span{font:600 12.5px 'Inter',system-ui,sans-serif;color:#b91c1c}
-.au-si{background:#dc2626;border-color:#dc2626;color:#fff}
-.au-si:hover{background:#b91c1c;border-color:#b91c1c;color:#fff}
-.au-no:hover{border-color:#64748b;color:#334155}
-.au-form-clave{margin-top:11px;padding-top:11px;border-top:1px dashed #e2e8f0;display:none}
-.au-form-clave.au-visible{display:block}
-.au-form-clave .au-grid{display:grid;grid-template-columns:1fr;gap:10px}
-@media(min-width:480px){.au-form-clave .au-grid{grid-template-columns:1fr 1fr}}
-.au-form-clave .au-campo{margin-bottom:0}
-.au-form-clave .au-input{padding:9px 12px;font-size:14px}
-.au-form-clave .au-acciones{margin-top:10px;display:flex;justify-content:flex-end;gap:8px}
-.au-form-clave .au-btn{width:auto;padding:8px 14px;font-size:13px}
-.au-vacio{text-align:center;color:#94a3b8;font-size:13.5px;padding:14px 0 6px}
-.au-mini-error{color:#b91c1c;font-size:12px;margin-top:8px;display:none}
-.au-mini-error.au-visible{display:block}
-
-/* ---------- Toasts ---------- */
-.au-toast-wrap{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
-  z-index:99998;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
-.au-toast{background:#0f172a;color:#fff;font:600 13.5px 'Inter',system-ui,sans-serif;padding:11px 18px;border-radius:999px;
-  box-shadow:0 10px 30px rgba(15,23,42,.35);display:flex;align-items:center;gap:8px;
-  animation:auUp .25s cubic-bezier(.2,.8,.3,1);max-width:min(92vw,460px);text-align:center}
-.au-toast svg{width:15px;height:15px;flex:none}
-.au-toast.au-ok svg{color:#34d399}
-.au-toast.au-err svg{color:#f87171}
-.au-toast.au-fuera{opacity:0;transform:translateY(8px);transition:opacity .3s,transform .3s}
-
-/* ---------- Accesibilidad: menos movimiento ---------- */
-@media (prefers-reduced-motion: reduce){
-  #au-login,.au-card,.au-menu,.au-modal,.au-toast,#au-gestion{animation:none}
-}
-
-</style>
-
-<!-- Pantalla de inicio de sesión: cubre la app hasta haber sesión válida -->
-<div id="au-login" role="dialog" aria-modal="true" aria-label="Iniciar sesión">
-    <div class="au-card">
-        <div class="au-tile" aria-hidden="true">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
-                <rect x="3" y="3.6" width="18" height="4.5" rx="1.6" fill="currentColor"/>
-                <rect x="3" y="10.75" width="18" height="4.5" rx="1.6" fill="currentColor" opacity=".66"/>
-                <rect x="3" y="17.9" width="9.4" height="3.8" rx="1.6" fill="currentColor" opacity=".66"/>
-                <circle cx="17.7" cy="18.9" r="4.9" fill="#ffffff"/>
-                <path d="M14.9 19.1l1.9 1.9 3.1-3.6" stroke="#4f46e5" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            </svg>
-        </div>
-        <h1 class="au-title">Rúbricas de Evaluación</h1>
-        <p class="au-sub">Acceso al generador y evaluador de rúbricas<br>Departamento de Tecnología</p>
-
-        <div id="au-banner" class="au-banner" hidden>
-            Primer acceso: todavía no existe ningún usuario. El usuario con el que inicies
-            sesión ahora se creará automáticamente y podrás añadir más desde
-            «Gestionar usuarios».
-        </div>
-
-        <form id="au-form" autocomplete="off" novalidate hidden>
-            <div class="au-campo">
-                <label for="au-user">Usuario</label>
-                <div class="au-input-wrap">
-                    <input id="au-user" class="au-input" type="text" autocomplete="username"
-                           spellcheck="false" autocapitalize="none" placeholder="Usuario">
-                </div>
-            </div>
-            <div class="au-campo">
-                <label for="au-pass">Contraseña</label>
-                <div class="au-input-wrap">
-                    <input id="au-pass" class="au-input" type="password" autocomplete="current-password" placeholder="Mínimo 6 caracteres">
-                    <button type="button" class="au-ojo" id="au-ojo" aria-label="Mostrar u ocultar la contraseña" tabindex="-1">
-                        <svg id="au-ojo-abierto" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                        <svg id="au-ojo-tachado" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" hidden><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                    </button>
-                </div>
-            </div>
-            <div id="au-error" class="au-error" role="alert"></div>
-            <button type="submit" id="au-submit" class="au-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-                <span id="au-submit-texto">Entrar</span>
-            </button>
-        </form>
-
-        <div id="au-error-conexion" class="au-error-conexion">
-            No se pudo conectar con la base de datos. Comprueba tu conexión a internet.
-        </div>
-    </div>
-</div>
+    <!-- AUTH · T24: los estilos y la pantalla de login se movieron al PRINCIPIO
+         del <body> (antes de cualquier contenido de la app) para que el velo
+         se pinte primero y no se vea la app antes del login. -->
 
 <!-- Chip flotante de usuario (sesión iniciada) -->
 <div id="au-fab" hidden>
@@ -9935,7 +11441,16 @@
     }
 
     /* ===== Pantalla de login ===== */
+    /* T26 · Fin del modo cortina de arranque (la marca 'au:logout' del logout
+       hace que el documento nuevo arranque con el velo sin tarjeta y todo el
+       cuerpo oculto): se levanta cuando el login está listo o hay error. */
+    function quitarCortinaArranque() {
+        try { document.documentElement.classList.remove('au-cerrando'); } catch (e) { }
+        var v = $('au-login');
+        if (v) v.classList.remove('au-cortina');
+    }
     function estadoLogin(estado) { /* 'conectando' | 'listo' | 'error' */
+        if (estado !== 'conectando') quitarCortinaArranque();
         $('au-form').hidden = estado !== 'listo';
         $('au-error-conexion').classList.toggle('au-visible', estado === 'error');
         errorConexion = estado === 'error';
@@ -9961,6 +11476,7 @@
         listo = true;
         if (reintentoTimer) { clearTimeout(reintentoTimer); reintentoTimer = null; }
         errorConexion = false;
+        quitarCortinaArranque(); /* T26: por si el arranque venía de un logout */
         $('au-login').hidden = true;
         document.body.style.overflow = '';
         pintarChip();
@@ -10077,10 +11593,48 @@
     }
 
     function logout() {
+        /* T25 · Cortina OPACA inmediata: el velo sube SIN animación antes de
+         * esperar nada de red, de modo que la app queda tapada al instante y
+         * no hay parpadeo entre la pantalla actual y el login mientras llega
+         * la recarga. Sin tarjeta: el login completo lo pinta la página nueva. */
+        /* T26 · Doble blindaje de la recarga:
+         *  a) html.au-cerrando oculta TODO el cuerpo salvo el velo → ningún
+         *     frame que el navegador congele o reutilice durante la recarga
+         *     (paint holding) puede contener la app.
+         *  b) La recarga espera 2 requestAnimationFrame tras subir la
+         *     cortina: garantiza que llegó a PINTARSE antes de desmontar el
+         *     documento (cierra la carrera con un borrado ultrarrápido).
+         *  c) sessionStorage 'au:logout' → la página nueva arranca también
+         *     en modo cortina hasta que el login esté listo: la transición
+         *     completa es cortina → login, sin la app ni la tarjeta a medias. */
+        var velo = $('au-login');
+        if (velo) { velo.classList.add('au-cortina'); velo.hidden = false; }
+        try { document.documentElement.classList.add('au-cerrando'); } catch (e) { }
+        abrirMenu(false);
+        var fab = $('au-fab');
+        if (fab) fab.hidden = true;
+        try { document.body.style.overflow = 'hidden'; } catch (e) { }
         var s = leerSesionLocal();
         var fin = s ? rdel('/sesiones/' + s.t).catch(function () { }) : Promise.resolve();
-        return fin.then(function () {
+        /* Garantía: aunque el borrado de la sesión se quede colgado, la
+         * recarga llega como muy tarde a los 3,5 s (nunca cortina infinita). */
+        var garantia = new Promise(function (resolve) { setTimeout(resolve, 3500); });
+        return Promise.race([fin, garantia]).then(function () {
             limpiarSesionLocal();
+            try { sessionStorage.setItem('au:logout', String(Date.now())); } catch (e) { }
+            /* Esperar a que la cortina se haya PINTADO de verdad (2 rAF ≈ 1
+             * frame presentado) antes de desmontar el documento, con tope
+             * por si los rAF están detenidos (pestaña en segundo plano). */
+            return new Promise(function (resolve) {
+                var pasos = 0;
+                var tope = setTimeout(resolve, 350);
+                function paso() {
+                    if (++pasos >= 2) { clearTimeout(tope); resolve(); }
+                    else requestAnimationFrame(paso);
+                }
+                requestAnimationFrame(paso);
+            });
+        }).then(function () {
             /* Recarga limpia: nada de rúbricas en memoria tras cerrar sesión */
             location.reload();
         });
