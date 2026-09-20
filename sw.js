@@ -17,7 +17,7 @@
    ===================================================================== */
 'use strict';
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = 'rubricas-app-' + VERSION;
 
 /* Recursos básicos que se guardan al instalar (tolerante a fallos) */
