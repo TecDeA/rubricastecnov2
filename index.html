@@ -4110,7 +4110,24 @@
             rubricsContainerCompetenciasEl.addEventListener('click', (e) => {
                 const btnOcultar = e.target.closest('[data-ocultar]');
                 if (btnOcultar) {
-                    criteriosOcultos.add(btnOcultar.getAttribute('data-ocultar'));
+                    const idOculto = btnOcultar.getAttribute('data-ocultar');
+                    criteriosOcultos.add(idOculto);
+                    // Si al ocultar este criterio su competencia seleccionada se
+                    // queda sin ningún criterio visible, se deselecciona sola (y
+                    // sus criterios ocultos se restauran, igual que al
+                    // desmarcarla a mano en la barra lateral).
+                    const crit = rubricasData.find(c => c.id == idOculto);
+                    if (crit) {
+                        const compId = crit.competencia;
+                        const criteriosComp = rubricasData.filter(c => c.competencia == compId);
+                        if (selectedCompetencias.some(id => id == compId) &&
+                            criteriosComp.every(c => criteriosOcultos.has(c.id))) {
+                            selectedCompetencias = selectedCompetencias.filter(id => id != compId);
+                            criteriosComp.forEach(c => criteriosOcultos.delete(c.id));
+                            const btnComp = competenciasListaEl.querySelector('button[data-id="' + compId + '"]');
+                            if (btnComp) updateButtonStyle(btnComp, false, 'competencia');
+                        }
+                    }
                     renderSelectedCompetenciaRubrics();
                     return;
                 }
@@ -4366,9 +4383,15 @@
             competenciasScreenEl.style.display = 'flex';
             multipleScreenEl.style.display = 'none';
 
-            // Reiniciar selección
+            // Reiniciar selección (también el resaltado de los botones de la
+            // barra lateral, que si no persistiría de una visita anterior)
             selectedCompetencias = [];
             criteriosOcultos.clear();
+            if (competenciasListaEl) {
+                competenciasListaEl.querySelectorAll('button[data-id]').forEach(btn => {
+                    updateButtonStyle(btn, false, 'competencia');
+                });
+            }
             renderSelectedCompetenciaRubrics();
 
             // Cerrar sidebar si está abierto
@@ -4385,8 +4408,14 @@
             competenciasScreenEl.style.display = 'none';
             multipleScreenEl.style.display = 'flex';
 
-            // Reiniciar selección
+            // Reiniciar selección (también el resaltado de los botones de la
+            // barra lateral, que si no persistiría de una visita anterior)
             selectedCriterios = [];
+            if (criteriosListaEl) {
+                criteriosListaEl.querySelectorAll('button[data-id]').forEach(btn => {
+                    updateButtonStyle(btn, false, 'criterio');
+                });
+            }
             renderSelectedRubrics();
 
             // Cerrar sidebar si está abierto
@@ -4563,13 +4592,11 @@
                             </div>
                         </div>
                     `;
-                    rubricsContainerCompetenciasEl.innerHTML += competenciaHTML;
-
                     // Criterios visibles de esta competencia (con botón × para ocultarlos),
-                    // ordenados por código: 1.3.1, 1.3.2, 1.4.1…
-                    criteriosOrdenados(visibles).forEach(criterio => {
-                        rubricsContainerCompetenciasEl.innerHTML += createRubricHTML(criterio, 'ocultar');
-                    });
+                    // ordenados por código: 1.3.1, 1.3.2, 1.4.1… — una sola
+                    // escritura en el DOM por grupo (más rápido que añadir tarjeta a tarjeta)
+                    rubricsContainerCompetenciasEl.innerHTML += competenciaHTML + criteriosOrdenados(visibles)
+                        .map(criterio => createRubricHTML(criterio, 'ocultar')).join('');
                 });
 
                 // Resumen de lo que se exportará
@@ -4597,11 +4624,10 @@
                 exportContainerEl.style.display = 'block';
 
                 // Pintar ordenados por código: 1.3.1, 1.3.2, 1.4.1…
-                criteriosOrdenados(rubricasData.filter(criterio => selectedCriterios.includes(criterio.id)))
-                    .forEach(criterio => {
-                        const rubricHTML = createRubricHTML(criterio, 'deseleccionar');
-                        rubricsContainerEl.innerHTML += rubricHTML;
-                    });
+                // (una sola escritura en el DOM: más rápido que añadir tarjeta a tarjeta)
+                rubricsContainerEl.innerHTML = criteriosOrdenados(
+                    rubricasData.filter(criterio => selectedCriterios.includes(criterio.id))
+                ).map(criterio => createRubricHTML(criterio, 'deseleccionar')).join('');
             }
         }
 
@@ -5962,7 +5988,7 @@
                         students = rubricData.config.students || [];
                         aspects = rubricData.config.aspects || [];
                         values = rubricData.config.values || ['NE'];
-                        teacherWeight = rubricData.config.teacherWeight || 75;
+                        teacherWeight = Number.isFinite(rubricData.config.teacherWeight) ? rubricData.config.teacherWeight : 75;
                         evaluationName = rubricData.config.evaluationName || 'Exposición';
                         groupName = rubricData.config.groupName || 'Sin especificar';
                         rubricDetails = rubricData.config.rubricDetails || {};
@@ -6005,6 +6031,17 @@
             if (saveTimeout) clearTimeout(saveTimeout);
             saveTimeout = setTimeout(saveToStorage, 1000);
         }
+
+        // Guardar de inmediato al cerrar u ocultar la pestaña/app:
+        // evita perder el último cambio, que aún estaría esperando el debounce de 1 s
+        const flushPendingSave = () => {
+            if (saveTimeout) { clearTimeout(saveTimeout); saveTimeout = null; }
+            if (hasUnsavedChanges) saveToStorage();
+        };
+        window.addEventListener('pagehide', flushPendingSave);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') flushPendingSave();
+        });
 
         function updateStatusIndicators() {
             const teacherStatus = document.getElementById('teacher-status');
@@ -6075,7 +6112,11 @@
             if (values.length === 0) return 0;
 
             // Si los valores son numéricos, escalamos linealmente
-            if (!isNaN(values[0]) && values[0] !== 'NE') {
+            // (NE se guarda al principio de la lista: se ignora al decidir)
+            const sinNE = values.filter(v => v !== 'NE');
+            // La escala lineal solo tiene sentido si el propio valor es numérico
+            // (una lista mixta como [1, «Cinco», 10] usa la ruta posicional)
+            if (sinNE.length > 0 && !isNaN(sinNE[0]) && !isNaN(score)) {
                 const numeric = values.filter(v => v !== 'NE' && !isNaN(v));
                 if (numeric.length > 0) {
                     const minValue = Math.min(...numeric.map(Number));
@@ -6196,16 +6237,31 @@
                 const input = document.createElement('input');
                 input.type = 'text';
                 input.value = item;
+                if (type === 'values' && item === 'NE') {
+                    input.readOnly = true;
+                    input.title = 'El valor NE no se puede renombrar';
+                    input.setAttribute('aria-readonly', 'true');
+                }
                 input.setAttribute('aria-label', 'Editar ' + (type === 'students' ? 'estudiante' : type === 'aspects' ? 'aspecto' : 'valor'));
                 input.addEventListener('change', (e) => {
                     const newValue = e.target.value.trim();
-                    if (!newValue || newValue === item) {
-                        e.target.value = item;
+                    const valorActual = items[index];
+                    if (!newValue || newValue === valorActual) {
+                        e.target.value = valorActual;
                         return;
                     }
-                    const oldValue = items[index];
+                    if (items.some((it, j) => j !== index && it === newValue)) {
+                        alert('Ya existe «' + newValue + '» en esta lista: los nombres deben ser únicos.');
+                        e.target.value = valorActual;
+                        return;
+                    }
                     items[index] = newValue;
-                    if (type === 'aspects') remapAspectDetails(oldValue, newValue);
+                    if (type === 'aspects') {
+                        remapAspectDetails(valorActual, newValue);
+                        remapClaveAspecto(valorActual, newValue);
+                    }
+                    if (type === 'students') remapClavesEstudiante(valorActual, newValue);
+                    if (type === 'values') remapClaveValor(valorActual, newValue);
                     scheduleSave();
                     updateCountBadges();
                 });
@@ -6226,8 +6282,14 @@
                 } else {
                     removeBtn.title = 'Eliminar';
                     removeBtn.addEventListener('click', () => {
-                        if (type === 'values' && item === 'NE') return;
+                        const actual = items[index];
+                        if (type === 'values' && actual === 'NE') return;
+                        if (type === 'values' && valorEnUso(actual) &&
+                            !confirm('Hay puntuaciones guardadas con el valor «' + actual + '».\n\nSi lo eliminas, esas celdas pasarán a NE (No evaluado). ¿Continuar?')) return;
                         items.splice(index, 1);
+                        if (type === 'students') limpiarClavesEstudiante(actual);
+                        if (type === 'aspects') limpiarClaveAspecto(actual);
+                        if (type === 'values') neutralizarValor(actual);
                         renderList(items, containerId, type);
                         scheduleSave();
                         updateCountBadges();
@@ -6245,6 +6307,118 @@
                 rubricDetails[newLabel] = rubricDetails[oldLabel];
                 delete rubricDetails[oldLabel];
             }
+        }
+
+        // Renombrar un estudiante conserva sus puntuaciones (profesor y coevaluación)
+        function remapClavesEstudiante(antiguo, nuevo) {
+            if (rubricData.teacher[antiguo]) {
+                rubricData.teacher[nuevo] = rubricData.teacher[antiguo];
+                delete rubricData.teacher[antiguo];
+            }
+            if (rubricData.students[antiguo]) {
+                rubricData.students[nuevo] = rubricData.students[antiguo];
+                delete rubricData.students[antiguo];
+            }
+            Object.keys(rubricData.students).forEach(evaluador => {
+                const fila = rubricData.students[evaluador];
+                if (fila[antiguo]) {
+                    fila[nuevo] = fila[antiguo];
+                    delete fila[antiguo];
+                }
+            });
+        }
+
+        // Renombrar un aspecto conserva las puntuaciones de todas las celdas
+        function remapClaveAspecto(antiguo, nuevo) {
+            Object.values(rubricData.teacher).forEach(fila => {
+                if (antiguo in fila) {
+                    fila[nuevo] = fila[antiguo];
+                    delete fila[antiguo];
+                }
+            });
+            Object.values(rubricData.students).forEach(evaluador => {
+                Object.values(evaluador).forEach(evaluado => {
+                    if (antiguo in evaluado) {
+                        evaluado[nuevo] = evaluado[antiguo];
+                        delete evaluado[antiguo];
+                    }
+                });
+            });
+        }
+
+        // Renombrar un valor conserva las puntuaciones que lo usan
+        // (las celdas guardan el texto del valor, no su posición)
+        function remapClaveValor(antiguo, nuevo) {
+            Object.values(rubricData.teacher).forEach(fila => {
+                Object.keys(fila).forEach(a => { if (fila[a] === antiguo) fila[a] = nuevo; });
+            });
+            Object.values(rubricData.students).forEach(evaluador => {
+                Object.values(evaluador).forEach(evaluado => {
+                    Object.keys(evaluado).forEach(a => { if (evaluado[a] === antiguo) evaluado[a] = nuevo; });
+                });
+            });
+        }
+
+        // Eliminar un estudiante borra sus puntuaciones (evita «datos fantasma»
+        // si se vuelve a añadir a alguien con el mismo nombre)
+        function limpiarClavesEstudiante(nombre) {
+            delete rubricData.teacher[nombre];
+            delete rubricData.students[nombre];
+            Object.keys(rubricData.students).forEach(evaluador => {
+                delete rubricData.students[evaluador][nombre];
+            });
+        }
+
+        // Eliminar un aspecto borra su columna de todas las celdas
+        function limpiarClaveAspecto(aspecto) {
+            Object.values(rubricData.teacher).forEach(fila => { delete fila[aspecto]; });
+            Object.values(rubricData.students).forEach(evaluador => {
+                Object.values(evaluador).forEach(evaluado => { delete evaluado[aspecto]; });
+            });
+        }
+
+        // ¿Hay celdas con este valor? (para avisar antes de eliminarlo)
+        function valorEnUso(valor) {
+            return Object.values(rubricData.teacher).some(fila => Object.values(fila).includes(valor)) ||
+                Object.values(rubricData.students).some(evaluador =>
+                    Object.values(evaluador).some(evaluado => Object.values(evaluado).includes(valor)));
+        }
+
+        // Al eliminar un valor, las celdas que lo usaban pasan a NE
+        // (la interfaz ya las mostraba como NE al no estar en la lista)
+        function neutralizarValor(valor) {
+            Object.values(rubricData.teacher).forEach(fila => {
+                Object.keys(fila).forEach(a => { if (fila[a] === valor) fila[a] = 'NE'; });
+            });
+            Object.values(rubricData.students).forEach(evaluador => {
+                Object.values(evaluador).forEach(evaluado => {
+                    Object.keys(evaluado).forEach(a => { if (evaluado[a] === valor) evaluado[a] = 'NE'; });
+                });
+            });
+        }
+
+        // Al recibir una rúbrica nueva conservando alumnado: los datos quedan
+        // como los pinta la pantalla. Fuera las columnas de aspectos que ya no
+        // existen y a NE las celdas con valores retirados de la lista
+        // (evita notas «fantasma» que resucitarían al reañadir el nombre
+        // y cálculos que contaban esas celdas como 0 en vez de excluirlas).
+        function limpiarDatosFueraDe(aspectosActivos, valoresValidos) {
+            const activos = new Set(aspectosActivos);
+            const validos = new Set(valoresValidos);
+            Object.values(rubricData.teacher).forEach(fila => {
+                Object.keys(fila).forEach(a => {
+                    if (!activos.has(a)) delete fila[a];
+                    else if (!validos.has(fila[a])) fila[a] = 'NE';
+                });
+            });
+            Object.values(rubricData.students).forEach(evaluador => {
+                Object.values(evaluador).forEach(evaluado => {
+                    Object.keys(evaluado).forEach(a => {
+                        if (!activos.has(a)) delete evaluado[a];
+                        else if (!validos.has(evaluado[a])) evaluado[a] = 'NE';
+                    });
+                });
+            });
         }
 
         function updateCountBadges() {
@@ -6467,6 +6641,9 @@
             }
             aspects = [...pending.aspects];
             values = ['NE', ...pending.values.filter(v => v && v !== 'NE')];
+            // Coherencia datos↔pantalla: se conservan las puntuaciones de los
+            // aspectos coincidentes y el resto de columnas/valores se limpia
+            limpiarDatosFueraDe(aspects, values);
             evaluationName = pending.evaluationName || ('Rúbrica ' + (pending.sourceTitle || ''));
             rubricDetails = {};
             (pending.rubricDetails || []).forEach(d => {
@@ -6867,14 +7044,14 @@
             // Contexto: quién evalúa
             const context = document.createElement('div');
             context.className = 'tab-context';
-            context.innerHTML = '<b>' + student + '</b> evalúa a sus compañeros. Selecciona un valor para cada aspecto.';
+            context.innerHTML = '<b>' + __escHTML(student) + '</b> evalúa a sus compañeros. Selecciona un valor para cada aspecto.';
             contentsContainer.appendChild(context);
 
             // Acciones masivas del evaluador
             const bulk = document.createElement('details');
             bulk.className = 'sub-details';
             const summary = document.createElement('summary');
-            summary.innerHTML = '⚡ Acciones masivas de ' + student +
+            summary.innerHTML = '⚡ Acciones masivas de ' + __escHTML(student) +
                 ' <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>';
             bulk.appendChild(summary);
             const bulkContent = document.createElement('div');
@@ -7163,6 +7340,12 @@
             resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
+        /* Quita espacios y caracteres no válidos en nombres de archivo (Windows/Android
+           rechazan / \ : * ? " < > | y la descarga falla en silencio) */
+        function nombreArchivoSeguro(s) {
+            return String(s == null ? '' : s).replace(/\s+/g, '').replace(/[\\/:*?"<>|]/g, '');
+        }
+
         function exportResultsCSV() {
             if (!lastResults) return;
             const rows = [['Estudiante', 'Nota Profesor', 'Nota Coevaluación', 'Nota Final']];
@@ -7175,10 +7358,13 @@
                     r.finalScore === null ? '' : fmtNum(r.finalScore)
                 ]);
             });
-            const csv = rows.map(r => r.join(';')).join('\n');
+            // Celdas con «;», comillas o saltos de línea se entrecomillan
+            // (estándar CSV) para no desplazar las columnas al abrir en Excel
+            const csvCell = v => /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+            const csv = rows.map(r => r.map(csvCell).join(';')).join('\n');
             const BOM = '\uFEFF';
             const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
-            const fileName = 'Resultados_' + evaluationName.replace(/\s+/g, '') + '_' + groupName.replace(/\s+/g, '') + '.csv';
+            const fileName = 'Resultados_' + nombreArchivoSeguro(evaluationName) + '_' + nombreArchivoSeguro(groupName) + '.csv';
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = fileName;
@@ -7192,7 +7378,7 @@
         function exportData() {
             const dataStr = JSON.stringify(rubricData, null, 2);
             const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const fileName = 'Evaluacion' + evaluationName.replace(/\s+/g, '') + groupName.replace(/\s+/g, '') + '.json';
+            const fileName = 'Evaluacion' + nombreArchivoSeguro(evaluationName) + nombreArchivoSeguro(groupName) + '.json';
             const link = document.createElement('a');
             link.href = URL.createObjectURL(dataBlob);
             link.download = fileName;
@@ -7214,7 +7400,7 @@
             };
             const dataStr = JSON.stringify(configData, null, 2);
             const dataBlob = new Blob([dataStr], { type: 'application/json' });
-            const fileName = 'Config' + groupName.replace(/\s+/g, '') + evaluationName.replace(/\s+/g, '') + '.json';
+            const fileName = 'Config' + nombreArchivoSeguro(groupName) + nombreArchivoSeguro(evaluationName) + '.json';
             const link = document.createElement('a');
             link.href = URL.createObjectURL(dataBlob);
             link.download = fileName;
@@ -7226,7 +7412,7 @@
             students = importedConfig.students || [];
             aspects = importedConfig.aspects || [];
             values = importedConfig.values || ['NE'];
-            teacherWeight = importedConfig.teacherWeight || 75;
+            teacherWeight = Number.isFinite(importedConfig.teacherWeight) ? importedConfig.teacherWeight : 75;
             evaluationName = importedConfig.evaluationName || 'Exposición';
             groupName = importedConfig.groupName || 'Sin especificar';
             rubricDetails = importedConfig.rubricDetails || {};
@@ -7505,7 +7691,6 @@
             return isNaN(q) ? null : q;
         }
 
-        function anFmt(n) { return Number(n).toFixed(2).replace('.', ','); }
 
         /** Código de criterio sugerido: del título (CYR.1.1.1…) o recordado, o C1, C2… */
         function anCodigoSugerido(aspect, i) {
@@ -7535,19 +7720,25 @@
             return codigos;
         }
 
+        /* Una celda TSV no puede contener tabuladores ni saltos de línea:
+           desplazarían columnas al importar en AutoNotas de Séneca */
+        function anCeldaTSV(t) {
+            return String(t == null ? '' : t).replace(/[\t\n\r]+/g, ' ').trim();
+        }
+
         function anGenerarTSV(codigos, conFinal) {
-            const cab = ['ALUMNO', ...aspects.map(a => codigos[a] || ('C' + (aspects.indexOf(a) + 1)))];
+            const cab = ['ALUMNO', ...aspects.map(a => anCeldaTSV(codigos[a]) || ('C' + (aspects.indexOf(a) + 1)))];
             if (conFinal) cab.push('NOTA FINAL');
             const filas = [cab.join('\t')];
             students.forEach(s => {
                 const r = (lastResults && lastResults[s]) || {};
-                const cols = [s];
+                const cols = [anCeldaTSV(s)];
                 aspects.forEach(a => {
                     const v = rubricData.teacher[s] ? rubricData.teacher[s][a] : null;
                     const n = anNotaDeAspecto(v);
-                    cols.push(n === null ? '' : anFmt(n));
+                    cols.push(n === null ? '' : fmtNum(n));
                 });
-                if (conFinal) cols.push(r.finalScore === null || r.finalScore === undefined ? '' : anFmt(r.finalScore));
+                if (conFinal) cols.push(r.finalScore === null || r.finalScore === undefined ? '' : fmtNum(r.finalScore));
                 filas.push(cols.join('\t'));
             });
             return filas.join('\n');
@@ -7644,7 +7835,7 @@
                 const tsv = anGenerarTSV(codigos, chkFinal.checked);
                 anGuardarCodigos(codigos);
                 const blob = new Blob(['\uFEFF' + tsv], { type: 'text/tab-separated-values;charset=utf-8' });
-                const nombre = 'AutoNotas_' + evaluationName.replace(/\s+/g, '') + (groupName ? '_' + groupName.replace(/\s+/g, '') : '') + '.tsv';
+                const nombre = 'AutoNotas_' + nombreArchivoSeguro(evaluationName) + (groupName ? '_' + nombreArchivoSeguro(groupName) : '') + '.tsv';
                 const link = document.createElement('a');
                 link.href = URL.createObjectURL(blob);
                 link.download = nombre;
@@ -7676,6 +7867,10 @@
                 const input = document.getElementById('student-name');
                 const studentName = input.value.trim();
                 if (studentName) {
+                    if (students.includes(studentName)) {
+                        alert('Ya existe un estudiante llamado «' + studentName + '». Los nombres deben ser únicos para que las puntuaciones no se mezclen.');
+                        return;
+                    }
                     students.push(studentName);
                     renderSetupLists();
                     input.value = '';
@@ -7691,6 +7886,10 @@
                 const input = document.getElementById('aspect-name');
                 const aspectName = input.value.trim();
                 if (aspectName) {
+                    if (aspects.includes(aspectName)) {
+                        alert('Ya existe un aspecto llamado «' + aspectName + '». Los aspectos deben ser únicos.');
+                        return;
+                    }
                     aspects.push(aspectName);
                     renderSetupLists();
                     input.value = '';
@@ -7710,6 +7909,10 @@
                         alert('El valor "NE" (No Evaluado) ya existe y no se puede añadir manualmente');
                         return;
                     }
+                    if (values.includes(valueName)) {
+                        alert('El valor «' + valueName + '» ya está en la lista.');
+                        return;
+                    }
                     values.push(valueName);
                     renderSetupLists();
                     input.value = '';
@@ -7722,7 +7925,7 @@
             });
 
             document.getElementById('teacher-weight').addEventListener('input', (e) => {
-                teacherWeight = parseInt(e.target.value);
+                teacherWeight = parseInt(e.target.value, 10);
                 updateWeightDisplay();
                 scheduleSave();
             });
@@ -7934,7 +8137,7 @@
             s.src = src;
             s.async = true;
             s.onload = function () { resolve(); };
-            s.onerror = function () { reject(new Error('No se pudo cargar ' + src)); };
+            s.onerror = function () { s.remove(); reject(new Error('No se pudo cargar ' + src)); };
             document.head.appendChild(s);
         });
     }
@@ -7968,8 +8171,11 @@
             .then(function () { return cargarScript(SDK_DB); })
             .then(function () {
                 try {
-                    firebase.initializeApp(FIREBASE_CONFIG);
-                    db = firebase.database();
+                    // Reintento-seguro: si un intento anterior ya creó la app
+                    // (arranque parcial), se reutiliza en vez de volver a
+                    // inicializarla (lo que lanzaría «duplicate app»)
+                    if (firebase.apps && firebase.apps.length) db = firebase.app().database();
+                    else { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.database(); }
                 } catch (e) {
                     if (!db) throw e;
                 }
@@ -7980,6 +8186,7 @@
                 return conectarDatos();
             })
             .catch(function (err) {
+                conectando = null; /* permite reintentar en la próxima operación (p. ej. PWA abierta sin red) */
                 estado = 'sin-conexion';
                 errorMsg = 'No se pudo cargar Firebase (' + (err && err.message ? err.message : 'red') + ')';
                 pintarListasAbiertas(); pintarEstadoEnModales(); notificarLista();
@@ -8798,7 +9005,7 @@
             const s = document.createElement('script');
             s.src = GIS_SRC; s.async = true;
             s.onload = function () { resolve(); };
-            s.onerror = function () { reject(new Error('No se pudo cargar Google Identity Services (¿sin conexión?).')); };
+            s.onerror = function () { s.remove(); reject(new Error('No se pudo cargar Google Identity Services (¿sin conexión?).')); };
             document.head.appendChild(s);
         });
     }
@@ -9025,7 +9232,7 @@
                 pintarAvisoError('El ID de cliente debe terminar en «apps.googleusercontent.com». Mira la ayuda de abajo.');
                 return;
             }
-            localStorage.setItem(CLIENT_ID_KEY, cid);
+            try { localStorage.setItem(CLIENT_ID_KEY, cid); } catch (e) { /* almacenamiento no disponible */ }
             bCon.disabled = true;
             bCon.innerHTML = '<span class="rc-spin"></span> Conectando…';
             conectar(cid, bCon);
@@ -10015,7 +10222,12 @@
         });
     }
 
+    /* Secuencia para ids de fila: los nombres de usuario provienen de Firebase (nodo de escritura pública)
+       y no son seguros para construir ids de DOM */
+    var filaUsuarioSeq = 0;
+
     function crearFilaUsuario(nombre, datos) {
+        var errId = 'au-gerr-' + (++filaUsuarioSeq);
         var fila = document.createElement('div');
         fila.className = 'au-fila';
 
@@ -10055,7 +10267,7 @@
         btnClave.addEventListener('click', function () {
             formClave.classList.toggle('au-visible');
             if (formClave.classList.contains('au-visible')) {
-                miniError('au-g-error-' + nombre, '');
+                miniError(errId, '');
                 try { inputC1.focus(); } catch (e) { }
             }
         });
@@ -10132,7 +10344,7 @@
             '<div class="au-campo"><label>Repetir contraseña</label>' +
             '<input class="au-input" type="password" placeholder="Otra vez la misma"></div>' +
             '</div>' +
-            '<div class="au-mini-error" id="au-g-error-' + nombre + '"></div>' +
+            '<div class="au-mini-error" id="' + errId + '"></div>' +
             '<div class="au-acciones">' +
             '<button type="button" class="au-mini au-no">Cancelar</button>' +
             '<button type="submit" class="au-btn">Guardar</button>' +
@@ -10142,17 +10354,17 @@
         formClave.querySelector('.au-no').addEventListener('click', function () {
             formClave.classList.remove('au-visible');
             inputC1.value = ''; inputC2.value = '';
-            miniError('au-g-error-' + nombre, '');
+            miniError(errId, '');
         });
         formClave.addEventListener('submit', function (e) {
             e.preventDefault();
-            miniError('au-g-error-' + nombre, '');
+            miniError(errId, '');
             cambiarPassword(nombre, inputC1.value, inputC2.value).then(function () {
                 formClave.classList.remove('au-visible');
                 inputC1.value = ''; inputC2.value = '';
                 toast('Contraseña de «' + nombre + '» actualizada', true);
             }).catch(function (err) {
-                miniError('au-g-error-' + nombre, err.message || 'No se pudo cambiar la contraseña');
+                miniError(errId, err.message || 'No se pudo cambiar la contraseña');
             });
         });
         fila.appendChild(formClave);
