@@ -1606,6 +1606,16 @@ html.au-cerrando body > *:not(#au-login){display:none!important}
 
             <div class="text-center mb-6 md:mb-8">
                 <h1 class="main-title title-gradient text-2xl md:text-3xl lg:text-4xl font-bold mb-1 md:mb-2">GENERACIÓN DE RÚBRICAS <br> DE EVALUACIÓN</h1>
+                <div class="flex justify-center mt-2 mb-1" aria-live="polite">
+                    <span id="app-version-chip" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-xs font-medium text-indigo-600 shadow-sm opacity-0 transition-opacity duration-300" title="Versión de la aplicación obtenida de sw.js">
+                        <span class="relative flex h-1.5 w-1.5" aria-hidden="true">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-indigo-500"></span>
+                        </span>
+                        <span>Versión</span>
+                        <span id="app-version-value" class="font-semibold tabular-nums">—</span>
+                    </span>
+                </div>
                 <p id="nombre-materia" class="text-base md:text-lg text-gray-600 mb-4">Departamento de Tecnología - IES Virgen de Villadiego</p>
             </div>
 
@@ -12032,6 +12042,47 @@ html.au-cerrando body > *:not(#au-login){display:none!important}
     conectarEventos();
     init();
 })();
+    </script>
+    <script>
+    /* Chip dinamico de version: lee la constante VERSION de sw.js y la
+       muestra bajo el titulo principal de la pantalla de inicio. */
+    (function () {
+        function pintarVersion(version) {
+            var chip = document.getElementById('app-version-chip');
+            var valueEl = document.getElementById('app-version-value');
+            if (!chip || !valueEl) return;
+            if (version) {
+                valueEl.textContent = version;
+                chip.classList.remove('opacity-0');
+                chip.classList.add('opacity-100');
+            } else {
+                chip.style.display = 'none';
+            }
+        }
+
+        function cargarVersion() {
+            fetch('./sw.js', { cache: 'no-store' })
+                .then(function (res) {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.text();
+                })
+                .then(function (texto) {
+                    // Coincide con: const VERSION = 'v6'  |  VERSION = "v6"  |  var VERSION='v6'
+                    var m = texto.match(/VERSION\s*=\s*['"]([^'"]+)['"]/);
+                    pintarVersion(m ? m[1] : null);
+                })
+                .catch(function () {
+                    // Si no se puede leer sw.js, ocultamos el chip silenciosamente.
+                    pintarVersion(null);
+                });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', cargarVersion);
+        } else {
+            cargarVersion();
+        }
+    })();
     </script>
     <script src="./regist_serviceWorker.js"></script>
 </body>
